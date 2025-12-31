@@ -1,0 +1,191 @@
+[
+  {
+    "qr_id": "entrance",
+    "node_id": "entrance",
+    "floor": 1,
+    "x": 931.02,
+    "y": 364.36,
+    "type": "entrance",
+    "label": "Main Entrance"
+  },
+  {
+    "qr_id": "j1",
+    "node_id": "j1",
+    "floor": 1,
+    "x": 822.85,
+    "y": 364.36,
+    "type": "junction",
+    "label": "junction 1"
+  },
+  {
+    "qr_id": "j2",
+    "node_id": "j2",
+    "floor": 1,
+    "x": 599.68,
+    "y": 364.36,
+    "type": "junction",
+    "label": "junction 2"
+  },
+  {
+    "qr_id": "j3",
+    "node_id": "j3",
+    "floor": 1,
+    "x": 484.58,
+    "y": 364.36,
+    "type": "junction",
+    "label": "junction 3"
+  },
+  {
+    "qr_id": "j4",
+    "node_id": "j4",
+    "floor": 1,
+    "x": 198.09,
+    "y": 364.36,
+    "type": "junction",
+    "label": "junction 4"
+  },
+  {
+    "qr_id": "j5",
+    "node_id": "j5",
+    "floor": 1,
+    "x": 198.09,
+    "y": 1234.32,
+    "type": "junction",
+    "label": "junction 5"
+  },
+  {
+    "qr_id": "j6",
+    "node_id": "j6",
+    "floor": 1,
+    "x": 305.98,
+    "y": 1234.32,
+    "type": "junction",
+    "label": "junction 6"
+  },
+  {
+    "qr_id": "j7",
+    "node_id": "j7",
+    "floor": 1,
+    "x": 484.58,
+    "y": 1234.32,
+    "type": "junction",
+    "label": "junction 7"
+  },
+  {
+    "qr_id": "j8",
+    "node_id": "j8",
+    "floor": 1,
+    "x": 484.58,
+    "y": 1119.12,
+    "type": "junction",
+    "label": "junction 8"
+  },
+  {
+    "qr_id": "j9",
+    "node_id": "j9",
+    "floor": 1,
+    "x": 822.85,
+    "y": 1119.12,
+    "type": "junction",
+    "label": "junction 9"
+  },
+  {
+    "qr_id": "cf",
+    "node_id": "cf",
+    "floor": 1,
+    "x": 599.68,
+    "y": 305.74,
+    "type": "café",
+    "label": "café"
+  },
+  {
+    "qr_id": "rst",
+    "node_id": "rst",
+    "floor": 1,
+    "x": 484.58,
+    "y": 640.78,
+    "type": "restaurant",
+    "label": "restaurant"
+  },
+  {
+    "qr_id": "sp1",
+    "node_id": "sp1",
+    "floor": 1,
+    "x": 198.09,
+    "y": 343.36,
+    "type": "shop",
+    "label": "shop 1"
+  },
+  {
+    "qr_id": "sp2",
+    "node_id": "sp2",
+    "floor": 1,
+    "x": 198.09,
+    "y": 836.88,
+    "type": "shop",
+    "label": "shop 2"
+  },
+  {
+    "qr_id": "sp3",
+    "node_id": "sp3",
+    "floor": 1,
+    "x": 198.09,
+    "y": 1130.93,
+    "type": "shop",
+    "label": "shop 3"
+  },
+  {
+    "qr_id": "sp4",
+    "node_id": "sp4",
+    "floor": 1,
+    "x": 198.09,
+    "y": 1157.41,
+    "type": "shop",
+    "label": "shop 4"
+  },
+  {
+    "qr_id": "sp5",
+    "node_id": "sp5",
+    "floor": 1,
+    "x": 198.09,
+    "y": 994.79,
+    "type": "shop",
+    "label": "shop 5"
+  },
+  {
+    "qr_id": "sp6",
+    "node_id": "sp6",
+    "floor": 1,
+    "x": 822.85,
+    "y": 997.37,
+    "type": "shop",
+    "label": "shop 6"
+  },
+  {
+    "qr_id": "sp7",
+    "node_id": "sp7",
+    "floor": 1,
+    "x": 562.73,
+    "y": 1119.12,
+    "type": "shop",
+    "label": "shop 7"
+  },
+  {
+    "qr_id": "str",
+    "node_id": "str",
+    "floor": 1,
+    "x": 198.09,
+    "y": 177.72,
+    "type": "stair",
+    "label": "stair"
+  },
+  {
+    "qr_id": "ex",
+    "node_id": "ex",
+    "floor": 1,
+    "x": 305.98,
+    "y": 1388.67,
+    "type": "exit",
+    "label": "exit"
+  }
+]
