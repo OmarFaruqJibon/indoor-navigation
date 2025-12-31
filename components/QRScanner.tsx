@@ -28,7 +28,6 @@ export const QRScanner: React.FC<QRScannerProps> = ({
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     setScanned(true);
     onScan(data);
-    // Auto-close after 1 second
     setTimeout(() => {
       onClose();
       setScanned(false);
