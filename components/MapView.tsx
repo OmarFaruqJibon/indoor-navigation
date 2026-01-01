@@ -5,6 +5,7 @@ import {
   GestureResponderEvent,
   PanResponder,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -38,17 +39,22 @@ export const MapView: React.FC<MapViewProps> = ({
   onNodePress,
   currentLocation,
 }) => {
-  const [scale, setScale] = useState(0.3);
-  const [translateX, setTranslateX] = useState(width / 2);
-  const [translateY, setTranslateY] = useState(height / 2);
-  const [lastScale, setLastScale] = useState(0.3);
-  const [lastTranslateX, setLastTranslateX] = useState(width / 2);
-  const [lastTranslateY, setLastTranslateY] = useState(height / 2);
+  // State for transformation
+  const [scale, setScale] = useState(1);
+  const [translateX, setTranslateX] = useState(0);
+  const [translateY, setTranslateY] = useState(0);
+  const [lastScale, setLastScale] = useState(1);
+  const [lastTranslateX, setLastTranslateX] = useState(0);
+  const [lastTranslateY, setLastTranslateY] = useState(0);
 
-  const pinchDistance = useRef(0);
-  const pinchScale = useRef(0.3);
-  const isPinching = useRef(false);
+  // Refs for gesture handling
+  const touchStartRef = useRef({ x1: 0, y1: 0, x2: 0, y2: 0 });
+  const isPinchingRef = useRef(false);
+  const initialDistanceRef = useRef(0);
+  const initialScaleRef = useRef(1);
+  const initialTranslateRef = useRef({ x: 0, y: 0 });
 
+  // Calculate map bounds
   const calculateBounds = () => {
     if (nodes.length === 0) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
 
@@ -64,46 +70,201 @@ export const MapView: React.FC<MapViewProps> = ({
   };
 
   const bounds = calculateBounds();
-  const mapWidth = bounds.maxX - bounds.minX + 300;
-  const mapHeight = bounds.maxY - bounds.minY + 300;
+  const mapWidth = bounds.maxX - bounds.minX;
+  const mapHeight = bounds.maxY - bounds.minY;
   const mapCenterX = (bounds.minX + bounds.maxX) / 2;
   const mapCenterY = (bounds.minY + bounds.maxY) / 2;
 
-  // Initialize map
+  // Initialize map to show everything
   useEffect(() => {
-    if (nodes.length > 0) {
-      const scaleX = (width * 0.8) / mapWidth;
-      const scaleY = (height * 0.8) / mapHeight;
-      const initialScale = Math.min(scaleX, scaleY, 0.8);
+    if (nodes.length > 0 && mapWidth > 0 && mapHeight > 0) {
+      // Calculate scale to fit map in view
+      const padding = 50;
+      const scaleX = (width - padding * 2) / mapWidth;
+      const scaleY = (height - padding * 2) / mapHeight;
+      const initialScale = Math.min(scaleX, scaleY, 1);
+
+      // Center the map
+      const initialTranslateX = width / 2 - mapCenterX * initialScale;
+      const initialTranslateY = height / 2 - mapCenterY * initialScale;
 
       setScale(initialScale);
+      setTranslateX(initialTranslateX);
+      setTranslateY(initialTranslateY);
       setLastScale(initialScale);
-      setTranslateX(width / 2 - mapCenterX * initialScale);
-      setTranslateY(height / 2 - mapCenterY * initialScale);
-      setLastTranslateX(width / 2 - mapCenterX * initialScale);
-      setLastTranslateY(height / 2 - mapCenterY * initialScale);
+      setLastTranslateX(initialTranslateX);
+      setLastTranslateY(initialTranslateY);
+      initialScaleRef.current = initialScale;
+      initialTranslateRef.current = {
+        x: initialTranslateX,
+        y: initialTranslateY,
+      };
     }
   }, [nodes]);
 
+  // Calculate distance between two points
+  const calculateDistance = (
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number
+  ) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // Calculate midpoint
+  const calculateMidpoint = (
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number
+  ) => {
+    return {
+      x: (x1 + x2) / 2,
+      y: (y1 + y2) / 2,
+    };
+  };
+
+  // Handle touch start
+  const handleTouchStart = (event: GestureResponderEvent) => {
+    const touches = event.nativeEvent.touches;
+
+    if (touches.length === 1) {
+      // Single touch for panning
+      isPinchingRef.current = false;
+      setLastTranslateX(translateX);
+      setLastTranslateY(translateY);
+    } else if (touches.length === 2) {
+      // Two touches for pinching
+      isPinchingRef.current = true;
+      const touch1 = touches[0];
+      const touch2 = touches[1];
+
+      touchStartRef.current = {
+        x1: touch1.pageX,
+        y1: touch1.pageY,
+        x2: touch2.pageX,
+        y2: touch2.pageY,
+      };
+
+      initialDistanceRef.current = calculateDistance(
+        touch1.pageX,
+        touch1.pageY,
+        touch2.pageX,
+        touch2.pageY
+      );
+      initialScaleRef.current = scale;
+
+      // Calculate initial midpoint
+      const midpoint = calculateMidpoint(
+        touch1.pageX,
+        touch1.pageY,
+        touch2.pageX,
+        touch2.pageY
+      );
+      initialTranslateRef.current = {
+        x: translateX,
+        y: translateY,
+      };
+    }
+  };
+
+  // Handle touch move
+  const handleTouchMove = (event: GestureResponderEvent) => {
+    const touches = event.nativeEvent.touches;
+
+    if (touches.length === 2 && isPinchingRef.current) {
+      // Pinch zoom
+      const touch1 = touches[0];
+      const touch2 = touches[1];
+
+      const currentDistance = calculateDistance(
+        touch1.pageX,
+        touch1.pageY,
+        touch2.pageX,
+        touch2.pageY
+      );
+
+      if (initialDistanceRef.current > 0) {
+        const scaleFactor = currentDistance / initialDistanceRef.current;
+        const newScale = Math.max(
+          0.1,
+          Math.min(3, initialScaleRef.current * scaleFactor)
+        );
+
+        // Calculate midpoint for zoom centering
+        const midpoint = calculateMidpoint(
+          touch1.pageX,
+          touch1.pageY,
+          touch2.pageX,
+          touch2.pageY
+        );
+
+        // Calculate new translation to zoom around the midpoint
+        const scaleRatio = newScale / initialScaleRef.current;
+        const newTranslateX =
+          midpoint.x -
+          (midpoint.x - initialTranslateRef.current.x) * scaleRatio;
+        const newTranslateY =
+          midpoint.y -
+          (midpoint.y - initialTranslateRef.current.y) * scaleRatio;
+
+        setScale(newScale);
+        setTranslateX(newTranslateX);
+        setTranslateY(newTranslateY);
+      }
+    }
+  };
+
+  // Handle touch end
+  const handleTouchEnd = () => {
+    isPinchingRef.current = false;
+    initialDistanceRef.current = 0;
+
+    // Clamp scale
+    const clampedScale = Math.max(0.1, Math.min(3, scale));
+    if (clampedScale !== scale) {
+      setScale(clampedScale);
+    }
+
+    // Ensure map stays within bounds
+    const maxTranslateX = width * 0.8;
+    const maxTranslateY = height * 0.8;
+    const minTranslateX = -mapWidth * clampedScale + width * 0.2;
+    const minTranslateY = -mapHeight * clampedScale + height * 0.2;
+
+    setTranslateX(Math.max(minTranslateX, Math.min(maxTranslateX, translateX)));
+    setTranslateY(Math.max(minTranslateY, Math.min(maxTranslateY, translateY)));
+  };
+
+  // Pan responder for single finger drag
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only respond to single touch moves when not pinching
+        return gestureState.numberActiveTouches === 1 && !isPinchingRef.current;
+      },
       onPanResponderGrant: () => {
-        setLastTranslateX(translateX);
-        setLastTranslateY(translateY);
+        if (!isPinchingRef.current) {
+          setLastTranslateX(translateX);
+          setLastTranslateY(translateY);
+        }
       },
       onPanResponderMove: (_, gestureState) => {
-        if (!isPinching.current) {
+        if (!isPinchingRef.current && gestureState.numberActiveTouches === 1) {
           setTranslateX(lastTranslateX + gestureState.dx);
           setTranslateY(lastTranslateY + gestureState.dy);
         }
       },
       onPanResponderRelease: () => {
-        const maxTranslateX = width * 0.5;
-        const maxTranslateY = height * 0.5;
-        const minTranslateX = -mapWidth * scale + width * 0.5;
-        const minTranslateY = -mapHeight * scale + height * 0.5;
+        // Clamp translation after release
+        const maxTranslateX = width * 0.8;
+        const maxTranslateY = height * 0.8;
+        const minTranslateX = -mapWidth * scale + width * 0.2;
+        const minTranslateY = -mapHeight * scale + height * 0.2;
 
         setTranslateX(
           Math.max(minTranslateX, Math.min(maxTranslateX, translateX))
@@ -115,67 +276,9 @@ export const MapView: React.FC<MapViewProps> = ({
     })
   ).current;
 
-  // Handle pinch to zoom
-  const handleTouchStart = (event: GestureResponderEvent) => {
-    const touches = event.nativeEvent.touches;
-    if (touches.length === 2) {
-      isPinching.current = true;
-      const dx = touches[0].pageX - touches[1].pageX;
-      const dy = touches[0].pageY - touches[1].pageY;
-      pinchDistance.current = Math.sqrt(dx * dx + dy * dy);
-      pinchScale.current = scale;
-    }
-  };
-
-  const handleTouchMove = (event: GestureResponderEvent) => {
-    const touches = event.nativeEvent.touches;
-    if (touches.length === 2) {
-      const dx = touches[0].pageX - touches[1].pageX;
-      const dy = touches[0].pageY - touches[1].pageY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (pinchDistance.current > 0) {
-        const pinchRatio = distance / pinchDistance.current;
-        const newScale = Math.max(
-          0.1,
-          Math.min(2, pinchScale.current * pinchRatio)
-        );
-
-        const centerX = (touches[0].pageX + touches[1].pageX) / 2;
-        const centerY = (touches[0].pageY + touches[1].pageY) / 2;
-
-        const scaleRatio = newScale / scale;
-        const newTranslateX = centerX - (centerX - translateX) * scaleRatio;
-        const newTranslateY = centerY - (centerY - translateY) * scaleRatio;
-
-        setScale(newScale);
-        setTranslateX(newTranslateX);
-        setTranslateY(newTranslateY);
-      }
-    }
-  };
-
-  const handleTouchEnd = () => {
-    isPinching.current = false;
-    pinchDistance.current = 0;
-
-    const clampedScale = Math.max(0.1, Math.min(2, scale));
-    if (clampedScale !== scale) {
-      setScale(clampedScale);
-    }
-
-    const maxTranslateX = width * 0.5;
-    const maxTranslateY = height * 0.5;
-    const minTranslateX = -mapWidth * clampedScale + width * 0.5;
-    const minTranslateY = -mapHeight * clampedScale + height * 0.5;
-
-    setTranslateX(Math.max(minTranslateX, Math.min(maxTranslateX, translateX)));
-    setTranslateY(Math.max(minTranslateY, Math.min(maxTranslateY, translateY)));
-  };
-
   // Zoom functions
   const zoomIn = () => {
-    const newScale = Math.min(2, scale * 1.2);
+    const newScale = Math.min(3, scale * 1.2);
     const centerX = width / 2;
     const centerY = height / 2;
 
@@ -203,13 +306,26 @@ export const MapView: React.FC<MapViewProps> = ({
   };
 
   const resetView = () => {
-    const scaleX = (width * 0.8) / mapWidth;
-    const scaleY = (height * 0.8) / mapHeight;
-    const newScale = Math.min(scaleX, scaleY, 0.8);
+    if (mapWidth === 0 || mapHeight === 0) return;
+
+    // Calculate scale to fit map in view
+    const padding = 50;
+    const scaleX = (width - padding * 2) / mapWidth;
+    const scaleY = (height - padding * 2) / mapHeight;
+    const newScale = Math.min(scaleX, scaleY, 1);
+
+    // Center the map
+    const newTranslateX = width / 2 - mapCenterX * newScale;
+    const newTranslateY = height / 2 - mapCenterY * newScale;
 
     setScale(newScale);
-    setTranslateX(width / 2 - mapCenterX * newScale);
-    setTranslateY(height / 2 - mapCenterY * newScale);
+    setTranslateX(newTranslateX);
+    setTranslateY(newTranslateY);
+    setLastScale(newScale);
+    setLastTranslateX(newTranslateX);
+    setLastTranslateY(newTranslateY);
+    initialScaleRef.current = newScale;
+    initialTranslateRef.current = { x: newTranslateX, y: newTranslateY };
   };
 
   const getNodeColor = (type: string): string => {
@@ -281,7 +397,7 @@ export const MapView: React.FC<MapViewProps> = ({
     );
   };
 
-  // mall floor structure
+  // Create mall floor structure
   const renderMallStructure = () => {
     const leftBound = bounds.minX;
     const rightBound = bounds.maxX;
@@ -334,259 +450,242 @@ export const MapView: React.FC<MapViewProps> = ({
             </SvgText>
           </G>
         ))}
-
-        {/* Main corridors */}
-        {/* <Line
-          x1={bounds.minX + 50}
-          y1={verticalMid}
-          x2={bounds.maxX - 50}
-          y2={verticalMid}
-          stroke="#CBD5E1"
-          strokeWidth="8"
-          strokeLinecap="round"
-        /> */}
-
-        {/* Vertical main corridor */}
-        {/* <Line
-          x1={mapCenterX}
-          y1={bounds.minY + 50}
-          x2={mapCenterX}
-          y2={bounds.maxY - 50}
-          stroke="#CBD5E1"
-          strokeWidth="6"
-          strokeLinecap="round"
-        /> */}
       </G>
     );
   };
 
   return (
-    <View
-      style={styles.container}
-      {...panResponder.panHandlers}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
-    >
-      <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-        <Defs>
-          <LinearGradient id="pathGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <Stop offset="0%" stopColor="#4A6FA5" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#2A9D8F" stopOpacity="1" />
-          </LinearGradient>
+    <View style={styles.container}>
+      {/* Touch handling container */}
+      <View
+        style={styles.touchContainer}
+        {...panResponder.panHandlers}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
+        <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+          <Defs>
+            <LinearGradient id="pathGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <Stop offset="0%" stopColor="#4A6FA5" stopOpacity="1" />
+              <Stop offset="100%" stopColor="#2A9D8F" stopOpacity="1" />
+            </LinearGradient>
 
-          <LinearGradient
-            id="currentLocationGradient"
-            x1="0%"
-            y1="0%"
-            x2="100%"
-            y2="100%"
+            <LinearGradient
+              id="currentLocationGradient"
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
+              <Stop offset="0%" stopColor="#2A9D8F" stopOpacity="0.8" />
+              <Stop offset="100%" stopColor="#1A7D6F" stopOpacity="0.8" />
+            </LinearGradient>
+
+            <LinearGradient
+              id="destinationGradient"
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
+              <Stop offset="0%" stopColor="#E63946" stopOpacity="0.8" />
+              <Stop offset="100%" stopColor="#C61926" stopOpacity="0.8" />
+            </LinearGradient>
+          </Defs>
+
+          <G
+            transform={`translate(${translateX}, ${translateY}) scale(${scale})`}
           >
-            <Stop offset="0%" stopColor="#2A9D8F" stopOpacity="0.8" />
-            <Stop offset="100%" stopColor="#1A7D6F" stopOpacity="0.8" />
-          </LinearGradient>
+            {/* Mall structure background */}
+            {renderMallStructure()}
 
-          <LinearGradient
-            id="destinationGradient"
-            x1="0%"
-            y1="0%"
-            x2="100%"
-            y2="100%"
-          >
-            <Stop offset="0%" stopColor="#E63946" stopOpacity="0.8" />
-            <Stop offset="100%" stopColor="#C61926" stopOpacity="0.8" />
-          </LinearGradient>
-        </Defs>
+            {/* Draw edges */}
+            {edges
+              .filter((edge) => edge.accessible)
+              .map((edge, index) => {
+                const fromNode = nodes.find((n) => n.node_id === edge.from);
+                const toNode = nodes.find((n) => n.node_id === edge.to);
 
-        <G
-          transform={`translate(${translateX}, ${translateY}) scale(${scale})`}
-        >
-          {/* Mall structure background */}
-          {renderMallStructure()}
-          {edges
-            .filter((edge) => edge.accessible)
-            .map((edge, index) => {
-              const fromNode = nodes.find((n) => n.node_id === edge.from);
-              const toNode = nodes.find((n) => n.node_id === edge.to);
+                if (!fromNode || !toNode) return null;
 
-              if (!fromNode || !toNode) return null;
+                const pathEdge = isPathEdge(edge.from, edge.to);
 
-              const pathEdge = isPathEdge(edge.from, edge.to);
+                return (
+                  <Line
+                    key={`edge-${index}`}
+                    x1={fromNode.x}
+                    y1={fromNode.y}
+                    x2={toNode.x}
+                    y2={toNode.y}
+                    stroke={pathEdge ? "url(#pathGradient)" : "#E2E8F0"}
+                    strokeWidth={pathEdge ? 6 : 4}
+                    strokeLinecap="round"
+                    strokeDasharray={edge.accessible ? "none" : "5,3"}
+                  />
+                );
+              })}
+
+            {/* Draw path */}
+            {path.map((nodeId, index) => {
+              if (index === path.length - 1) return null;
+
+              const currentNode = nodes.find((n) => n.node_id === nodeId);
+              const nextNode = nodes.find((n) => n.node_id === path[index + 1]);
+
+              if (!currentNode || !nextNode) return null;
 
               return (
-                <Line
-                  key={`edge-${index}`}
-                  x1={fromNode.x}
-                  y1={fromNode.y}
-                  x2={toNode.x}
-                  y2={toNode.y}
-                  stroke={pathEdge ? "url(#pathGradient)" : "#E2E8F0"}
-                  strokeWidth={pathEdge ? 6 : 4}
-                  strokeLinecap="round"
-                  strokeDasharray={edge.accessible ? "none" : "5,3"}
-                />
+                <G key={`path-${index}`}>
+                  <Line
+                    x1={currentNode.x}
+                    y1={currentNode.y}
+                    x2={nextNode.x}
+                    y2={nextNode.y}
+                    stroke="url(#pathGradient)"
+                    strokeWidth={8}
+                    strokeLinecap="round"
+                    strokeOpacity="0.9"
+                  />
+
+                  {/* Walking direction indicator */}
+                  {index < path.length - 2 && (
+                    <Polygon
+                      points={`
+                        ${nextNode.x - 5},${nextNode.y - 10}
+                        ${nextNode.x + 5},${nextNode.y}
+                        ${nextNode.x - 5},${nextNode.y + 10}
+                      `}
+                      fill="#4A6FA5"
+                      transform={`rotate(${
+                        Math.atan2(
+                          nextNode.y - currentNode.y,
+                          nextNode.x - currentNode.x
+                        ) *
+                        (180 / Math.PI)
+                      }, ${nextNode.x}, ${nextNode.y})`}
+                    />
+                  )}
+                </G>
               );
             })}
 
-          {path.map((nodeId, index) => {
-            if (index === path.length - 1) return null;
+            {/* Draw nodes */}
+            {nodes.map((node) => {
+              const isCurrent = currentLocation?.node_id === node.node_id;
+              const isDestination =
+                path.length > 0 && node.node_id === path[path.length - 1];
+              const isInPath = isNodeInPath(node.node_id);
+              const size = getNodeSize(node.type);
 
-            const currentNode = nodes.find((n) => n.node_id === nodeId);
-            const nextNode = nodes.find((n) => n.node_id === path[index + 1]);
+              return (
+                <G
+                  key={node.node_id}
+                  onPress={() => onNodePress && onNodePress(node)}
+                >
+                  {/* Glow effect for important nodes */}
+                  {(isCurrent || isDestination) && (
+                    <Circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={size + 8}
+                      fill={isCurrent ? "#2A9D8F20" : "#E6394620"}
+                    />
+                  )}
 
-            if (!currentNode || !nextNode) return null;
-
-            return (
-              <G key={`path-${index}`}>
-                <Line
-                  x1={currentNode.x}
-                  y1={currentNode.y}
-                  x2={nextNode.x}
-                  y2={nextNode.y}
-                  stroke="url(#pathGradient)"
-                  strokeWidth={8}
-                  strokeLinecap="round"
-                  strokeOpacity="0.9"
-                />
-
-                {/* Walking direction indicator */}
-                {index < path.length - 2 && (
-                  <Polygon
-                    points={`
-                      ${nextNode.x - 5},${nextNode.y - 10}
-                      ${nextNode.x + 5},${nextNode.y}
-                      ${nextNode.x - 5},${nextNode.y + 10}
-                    `}
-                    fill="#4A6FA5"
-                    transform={`rotate(${
-                      Math.atan2(
-                        nextNode.y - currentNode.y,
-                        nextNode.x - currentNode.x
-                      ) *
-                      (180 / Math.PI)
-                    }, ${nextNode.x}, ${nextNode.y})`}
-                  />
-                )}
-              </G>
-            );
-          })}
-
-          {/* Draw nodes*/}
-          {nodes.map((node) => {
-            const isCurrent = currentLocation?.node_id === node.node_id;
-            const isDestination =
-              path.length > 0 && node.node_id === path[path.length - 1];
-            const isInPath = isNodeInPath(node.node_id);
-            const size = getNodeSize(node.type);
-
-            return (
-              <G
-                key={node.node_id}
-                onPress={() => onNodePress && onNodePress(node)}
-              >
-                {(isCurrent || isDestination) && (
+                  {/* Node background */}
                   <Circle
                     cx={node.x}
                     cy={node.y}
-                    r={size + 8}
-                    fill={isCurrent ? "#2A9D8F20" : "#E6394620"}
+                    r={size}
+                    fill={
+                      isCurrent
+                        ? "url(#currentLocationGradient)"
+                        : isDestination
+                        ? "url(#destinationGradient)"
+                        : getNodeColor(node.type)
+                    }
+                    stroke="#FFFFFF"
+                    strokeWidth="3"
                   />
-                )}
 
-                {/* Node background */}
-                <Circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={size}
-                  fill={
-                    isCurrent
-                      ? "url(#currentLocationGradient)"
-                      : isDestination
-                      ? "url(#destinationGradient)"
-                      : getNodeColor(node.type)
-                  }
-                  stroke="#FFFFFF"
-                  strokeWidth="3"
-                />
+                  {/* Node icon */}
+                  <SvgText
+                    x={node.x}
+                    y={node.y + size * 0.4}
+                    fill="#FFFFFF"
+                    fontSize={size - 4}
+                    textAnchor="middle"
+                    fontWeight="bold"
+                  >
+                    {getNodeIcon(node.type)}
+                  </SvgText>
 
-                {/* Node icon*/}
-                <SvgText
-                  x={node.x}
-                  y={node.y + size * 0.4}
-                  fill="#FFFFFF"
-                  fontSize={size - 4}
-                  textAnchor="middle"
-                  fontWeight="bold"
-                >
-                  {getNodeIcon(node.type)}
-                </SvgText>
-
-                {/* Node label */}
-                {scale > 0.2 && (
-                  <>
-                    <SvgText
-                      x={node.x}
-                      y={node.y - size - 8}
-                      fill="#1A1A1A"
-                      fontSize={Math.max(10, 12 * scale)}
-                      fontWeight="600"
-                      textAnchor="middle"
-                      stroke="#FFFFFF"
-                      strokeWidth={2 * scale}
-                      strokeOpacity="0.8"
-                    >
-                      {node.label}
-                    </SvgText>
-
-                    {/* Type label */}
-                    {scale > 0.3 && (
+                  {/* Node label - show based on zoom level */}
+                  {scale > 0.3 && (
+                    <>
                       <SvgText
                         x={node.x}
-                        y={node.y - size - 20}
-                        fill="#64748B"
-                        fontSize={Math.max(8, 10 * scale)}
-                        fontWeight="500"
+                        y={node.y - size - 8}
+                        fill="#1A1A1A"
+                        fontSize={Math.max(10, 12 * scale)}
+                        fontWeight="600"
                         textAnchor="middle"
+                        stroke="#FFFFFF"
+                        strokeWidth={2 * scale}
+                        strokeOpacity="0.8"
                       >
-                        {node.type.toUpperCase()}
+                        {node.label}
                       </SvgText>
-                    )}
-                  </>
-                )}
-              </G>
-            );
-          })}
-        </G>
-      </Svg>
+
+                      {/* Type label - show when zoomed in more */}
+                      {scale > 0.5 && (
+                        <SvgText
+                          x={node.x}
+                          y={node.y - size - 22}
+                          fill="#64748B"
+                          fontSize={Math.max(8, 10 * scale)}
+                          fontWeight="500"
+                          textAnchor="middle"
+                        >
+                          {node.type.toUpperCase()}
+                        </SvgText>
+                      )}
+                    </>
+                  )}
+                </G>
+              );
+            })}
+          </G>
+        </Svg>
+      </View>
 
       {/* Map controls */}
       <View style={styles.mapControls}>
-        <View>
-          {/* <TouchableOpacity style={styles.zoomButton} onPress={zoomIn}>
-            <Ionicons name="add" size={24} color="#4A6FA5" />
+        <View style={styles.controlGroup}>
+          <TouchableOpacity style={styles.controlButton} onPress={zoomIn}>
+            <Ionicons name="add" size={22} color="#4A6FA5" />
           </TouchableOpacity>
-          <View style={styles.zoomDivider} />
-          <TouchableOpacity style={styles.zoomButton} onPress={zoomOut}>
-            <Ionicons name="remove" size={24} color="#4A6FA5" />
+          <TouchableOpacity style={styles.controlButton} onPress={zoomOut}>
+            <Ionicons name="remove" size={22} color="#4A6FA5" />
           </TouchableOpacity>
-          <View style={styles.zoomDivider} /> */}
-          <TouchableOpacity style={styles.zoomButton} onPress={resetView}>
+          <TouchableOpacity style={styles.controlButton} onPress={resetView}>
             <Ionicons name="expand" size={20} color="#4A6FA5" />
           </TouchableOpacity>
         </View>
 
         {/* Scale indicator */}
-        {/* <View style={styles.scaleIndicator}>
+        <View style={styles.scaleIndicator}>
           <Text style={styles.scaleText}>{Math.round(scale * 100)}%</Text>
-        </View> */}
+        </View>
 
         {/* Instructions */}
-        {/* <View style={styles.instructions}>
+        <View style={styles.instructions}>
           <Text style={styles.instructionText}>
             Pinch to zoom • Drag to pan
           </Text>
-        </View> */}
+        </View>
       </View>
     </View>
   );
@@ -599,13 +698,19 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
+  touchContainer: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
   mapControls: {
     position: "absolute",
     right: 16,
     bottom: 16,
     alignItems: "flex-end",
+    gap: 12,
   },
-  zoomControls: {
+  controlGroup: {
     backgroundColor: "rgba(255, 255, 255, 0.95)",
     borderRadius: 12,
     padding: 4,
@@ -614,28 +719,26 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    marginBottom: 12,
+    gap: 1,
   },
-  zoomButton: {
+  controlButton: {
     width: 44,
     height: 44,
     borderRadius: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "rgba(248, 249, 250, 0.9)",
     justifyContent: "center",
     alignItems: "center",
-    marginVertical: 2,
-  },
-  zoomDivider: {
-    height: 1,
-    backgroundColor: "#E2E8F0",
-    marginHorizontal: 8,
   },
   scaleIndicator: {
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    // backgroundColor: "#F8F9FA",
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 20,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   scaleText: {
     fontSize: 14,
@@ -649,7 +752,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   instructionText: {
-    fontSize: 8,
+    fontSize: 12,
     color: "#FFFFFF",
     fontWeight: "500",
   },
