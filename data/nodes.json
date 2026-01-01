@@ -112,7 +112,7 @@
     "node_id": "sp1",
     "floor": 1,
     "x": 198.09,
-    "y": 343.36,
+    "y": 450,
     "type": "shop",
     "label": "shop 1"
   },
@@ -139,7 +139,7 @@
     "node_id": "sp4",
     "floor": 1,
     "x": 484.58,
-    "y": 1157.41,
+    "y": 980,
     "type": "shop",
     "label": "shop 4"
   },
@@ -165,10 +165,37 @@
     "qr_id": "sp7",
     "node_id": "sp7",
     "floor": 1,
-    "x": 562.73,
+    "x": 600,
     "y": 1119.12,
     "type": "shop",
     "label": "shop 7"
+  },
+  {
+    "qr_id": "sp8",
+    "node_id": "sp8",
+    "floor": 1,
+    "x": 484.58,
+    "y": 820,
+    "type": "shop",
+    "label": "shop 8"
+  },
+  {
+    "qr_id": "sp9",
+    "node_id": "sp9",
+    "floor": 1,
+    "x": 198.09,
+    "y": 650,
+    "type": "shop",
+    "label": "shop 9"
+  },
+  {
+    "qr_id": "sp10",
+    "node_id": "sp10",
+    "floor": 1,
+    "x": 822.85,
+    "y": 750,
+    "type": "shop",
+    "label": "shop 10"
   },
   {
     "qr_id": "str",

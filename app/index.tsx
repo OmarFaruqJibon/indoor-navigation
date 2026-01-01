@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -36,12 +37,13 @@ export default function Index() {
   const [loading, setLoading] = useState(true);
   const [estimatedTime, setEstimatedTime] = useState<number>(0);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(300)).current;
 
   useEffect(() => {
-    // Initialize graph with data
+    // Initialize graph
     const initGraph = () => {
       try {
         setNodes(nodesData as Node[]);
@@ -138,6 +140,7 @@ export default function Index() {
   const handleDestinationSelect = (node: Node) => {
     setDestination(node.node_id);
     setShowDestinations(false);
+    setSearchQuery("");
   };
 
   const getCurrentNode = (): Node | undefined => {
@@ -153,6 +156,7 @@ export default function Index() {
     setPath([]);
     setDistance(0);
     setEstimatedTime(0);
+    setSearchQuery("");
   };
 
   const resetNavigation = () => {
@@ -162,12 +166,35 @@ export default function Index() {
     setDistance(0);
     setEstimatedTime(0);
     setShowDestinations(false);
+    setSearchQuery("");
   };
 
-  // Filter out current location from destinations
   const getDestinationNodes = (): Node[] => {
     if (!currentLocation) return [];
-    return nodes.filter((node) => node.node_id !== currentLocation);
+    return nodes.filter(
+      (node) =>
+        node.node_id !== currentLocation &&
+        node.type !== "junction" &&
+        node.type !== "stair"
+    );
+  };
+
+  // Filter nodes
+  const getFilteredNodes = (): Node[] => {
+    const destinationNodes = getDestinationNodes();
+
+    if (!searchQuery.trim()) {
+      return destinationNodes;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    return destinationNodes.filter((node) => {
+      return (
+        node.label.toLowerCase().includes(query) ||
+        node.type.toLowerCase().includes(query) ||
+        node.node_id.toLowerCase().includes(query)
+      );
+    });
   };
 
   const groupNodesByType = (nodes: Node[]) => {
@@ -260,6 +287,11 @@ export default function Index() {
     }
   };
 
+  const handleModalClose = () => {
+    setShowDestinations(false);
+    setSearchQuery("");
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -276,40 +308,40 @@ export default function Index() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.title}>Mall Navigator</Text>
-            <Text style={styles.subtitle}>Find your way around easily</Text>
-          </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={[styles.iconButton, styles.accessibilityButton]}
-              onPress={() => setAccessibleOnly(!accessibleOnly)}
-            >
-              <MaterialIcons
-                name="accessible"
-                size={22}
-                color={accessibleOnly ? "#2A9D8F" : "#6C757D"}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.iconButton, styles.infoButton]}
-              onPress={() => setShowInstructions(true)}
-            >
-              <Ionicons
-                name="information-circle-outline"
-                size={24}
-                color="#4A6FA5"
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Animated.View>
-
       {/* Main Content */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.title}>Mall Navigator</Text>
+              <Text style={styles.subtitle}>Find your way around easily</Text>
+            </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={[styles.iconButton, styles.accessibilityButton]}
+                onPress={() => setAccessibleOnly(!accessibleOnly)}
+              >
+                <MaterialIcons
+                  name="accessible"
+                  size={22}
+                  color={accessibleOnly ? "#2A9D8F" : "#6C757D"}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.iconButton, styles.infoButton]}
+                onPress={() => setShowInstructions(true)}
+              >
+                <Ionicons
+                  name="information-circle-outline"
+                  size={24}
+                  color="#4A6FA5"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+
         <Animated.View
           style={[
             styles.statusCard,
@@ -460,45 +492,6 @@ export default function Index() {
               }}
             />
           </View>
-          {/* <View style={styles.legendContainer}>
-            <Text style={styles.legendTitle}>Legend:</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.legend}
-            >
-              <View style={styles.legendItem}>
-                <View
-                  style={[styles.legendDot, { backgroundColor: "#2A9D8F" }]}
-                />
-                <Text style={styles.legendText}>Your Location</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View
-                  style={[styles.legendDot, { backgroundColor: "#E63946" }]}
-                />
-                <Text style={styles.legendText}>Destination</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View
-                  style={[styles.legendDot, { backgroundColor: "#4A6FA5" }]}
-                />
-                <Text style={styles.legendText}>Stores</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View
-                  style={[styles.legendDot, { backgroundColor: "#D4A762" }]}
-                />
-                <Text style={styles.legendText}>Café</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View
-                  style={[styles.legendDot, { backgroundColor: "#E76F51" }]}
-                />
-                <Text style={styles.legendText}>Restaurant</Text>
-              </View>
-            </ScrollView>
-          </View> */}
         </View>
 
         {/* Quick Actions */}
@@ -585,12 +578,12 @@ export default function Index() {
         onScan={handleQRScan}
       />
 
-      {/* Destinations Modal */}
+      {/* Destinations Modal with Search */}
       <Modal
         visible={showDestinations}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowDestinations(false)}
+        onRequestClose={handleModalClose}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -603,10 +596,39 @@ export default function Index() {
               </View>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
-                onPress={() => setShowDestinations(false)}
+                onPress={handleModalClose}
               >
                 <Ionicons name="close" size={28} color="#6C757D" />
               </TouchableOpacity>
+            </View>
+
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+              <View style={styles.searchInputContainer}>
+                <Ionicons
+                  name="search"
+                  size={20}
+                  color="#6C757D"
+                  style={styles.searchIcon}
+                />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search destinations..."
+                  placeholderTextColor="#999"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.clearSearchButton}
+                    onPress={() => setSearchQuery("")}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             <ScrollView
@@ -614,72 +636,153 @@ export default function Index() {
               showsVerticalScrollIndicator={false}
             >
               {(() => {
-                const destinationNodes = getDestinationNodes();
-                const groupedNodes = groupNodesByType(destinationNodes);
+                const filteredNodes = getFilteredNodes();
 
-                return Object.entries(groupedNodes).map(([type, typeNodes]) => (
-                  <View key={type} style={styles.categorySection}>
-                    <View style={styles.categoryHeader}>
-                      <FontAwesome5
-                        name={getCategoryIcon(type)}
-                        size={18}
-                        color={getTypeColor(type)}
+                if (filteredNodes.length === 0) {
+                  return (
+                    <View style={styles.noResultsContainer}>
+                      <Ionicons
+                        name="search-outline"
+                        size={48}
+                        color="#CBD5E1"
                       />
-                      <Text style={styles.categoryTitle}>
-                        {getTypeLabel(type)}
+                      <Text style={styles.noResultsTitle}>
+                        No results found
                       </Text>
-                      <Text style={styles.categoryCount}>
-                        ({typeNodes.length})
+                      <Text style={styles.noResultsText}>
+                        {searchQuery
+                          ? `No destinations matching "${searchQuery}"`
+                          : "No destinations available"}
                       </Text>
                     </View>
+                  );
+                }
 
-                    <View style={styles.destinationsGrid}>
-                      {typeNodes.map((node) => (
-                        <TouchableOpacity
-                          key={node.node_id}
-                          style={[
-                            styles.destinationCard,
-                            destination === node.node_id &&
-                              styles.selectedDestinationCard,
-                          ]}
-                          onPress={() => handleDestinationSelect(node)}
-                        >
-                          <View
+                if (searchQuery) {
+                  return (
+                    <View style={styles.searchResultsSection}>
+                      <View style={styles.categoryHeader}>
+                        <FontAwesome5 name="search" size={18} color="#4A6FA5" />
+                        <Text style={styles.categoryTitle}>
+                          Search Results ({filteredNodes.length})
+                        </Text>
+                      </View>
+                      <View style={styles.destinationsGrid}>
+                        {filteredNodes.map((node) => (
+                          <TouchableOpacity
+                            key={node.node_id}
                             style={[
-                              styles.destinationIcon,
-                              { backgroundColor: getTypeColor(node.type) },
+                              styles.destinationCard,
+                              destination === node.node_id &&
+                                styles.selectedDestinationCard,
                             ]}
+                            onPress={() => handleDestinationSelect(node)}
                           >
-                            <MaterialIcons
-                              name={getTypeIcon(node.type)}
-                              size={20}
-                              color="#FFFFFF"
-                            />
-                          </View>
-                          <Text
-                            style={styles.destinationName}
-                            numberOfLines={2}
-                          >
-                            {node.label}
-                          </Text>
-                          <Text style={styles.destinationType}>
-                            {node.type.charAt(0).toUpperCase() +
-                              node.type.slice(1)}
-                          </Text>
-                          {destination === node.node_id && (
-                            <View style={styles.selectedBadge}>
-                              <Ionicons
-                                name="checkmark"
-                                size={16}
+                            <View
+                              style={[
+                                styles.destinationIcon,
+                                { backgroundColor: getTypeColor(node.type) },
+                              ]}
+                            >
+                              <MaterialIcons
+                                name={getTypeIcon(node.type)}
+                                size={20}
                                 color="#FFFFFF"
                               />
                             </View>
-                          )}
-                        </TouchableOpacity>
-                      ))}
+                            <Text
+                              style={styles.destinationName}
+                              numberOfLines={2}
+                            >
+                              {node.label}
+                            </Text>
+                            <Text style={styles.destinationType}>
+                              {node.type.charAt(0).toUpperCase() +
+                                node.type.slice(1)}
+                            </Text>
+                            {destination === node.node_id && (
+                              <View style={styles.selectedBadge}>
+                                <Ionicons
+                                  name="checkmark"
+                                  size={16}
+                                  color="#FFFFFF"
+                                />
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
                     </View>
-                  </View>
-                ));
+                  );
+                } else {
+                  const groupedNodes = groupNodesByType(filteredNodes);
+
+                  return Object.entries(groupedNodes).map(
+                    ([type, typeNodes]) => (
+                      <View key={type} style={styles.categorySection}>
+                        <View style={styles.categoryHeader}>
+                          <FontAwesome5
+                            name={getCategoryIcon(type)}
+                            size={18}
+                            color={getTypeColor(type)}
+                          />
+                          <Text style={styles.categoryTitle}>
+                            {getTypeLabel(type)}
+                          </Text>
+                          <Text style={styles.categoryCount}>
+                            ({typeNodes.length})
+                          </Text>
+                        </View>
+
+                        <View style={styles.destinationsGrid}>
+                          {typeNodes.map((node) => (
+                            <TouchableOpacity
+                              key={node.node_id}
+                              style={[
+                                styles.destinationCard,
+                                destination === node.node_id &&
+                                  styles.selectedDestinationCard,
+                              ]}
+                              onPress={() => handleDestinationSelect(node)}
+                            >
+                              <View
+                                style={[
+                                  styles.destinationIcon,
+                                  { backgroundColor: getTypeColor(node.type) },
+                                ]}
+                              >
+                                <MaterialIcons
+                                  name={getTypeIcon(node.type)}
+                                  size={20}
+                                  color="#FFFFFF"
+                                />
+                              </View>
+                              <Text
+                                style={styles.destinationName}
+                                numberOfLines={2}
+                              >
+                                {node.label}
+                              </Text>
+                              <Text style={styles.destinationType}>
+                                {node.type.charAt(0).toUpperCase() +
+                                  node.type.slice(1)}
+                              </Text>
+                              {destination === node.node_id && (
+                                <View style={styles.selectedBadge}>
+                                  <Ionicons
+                                    name="checkmark"
+                                    size={16}
+                                    color="#FFFFFF"
+                                  />
+                                </View>
+                              )}
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )
+                  );
+                }
               })()}
             </ScrollView>
           </View>
@@ -1050,35 +1153,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
   },
-  legendContainer: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#E9ECEF",
-  },
-  legendTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#495057",
-    marginBottom: 12,
-  },
-  legend: {
-    flexDirection: "row",
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 16,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 12,
-    color: "#6C757D",
-  },
   quickActions: {
     backgroundColor: "#FFFFFF",
     marginHorizontal: 20,
@@ -1173,10 +1247,39 @@ const styles = StyleSheet.create({
   modalCloseBtn: {
     padding: 4,
   },
+  searchContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E9ECEF",
+  },
+  searchInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8F9FA",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#1A1A1A",
+    paddingVertical: 8,
+  },
+  clearSearchButton: {
+    padding: 4,
+  },
   destinationsList: {
     padding: 20,
   },
   categorySection: {
+    marginBottom: 30,
+  },
+  searchResultsSection: {
     marginBottom: 30,
   },
   categoryHeader: {
@@ -1245,6 +1348,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#4A6FA5",
     justifyContent: "center",
     alignItems: "center",
+  },
+  noResultsContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+  },
+  noResultsTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#4A6FA5",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: "#6C757D",
+    textAlign: "center",
+    maxWidth: "80%",
   },
   instructionsList: {
     padding: 20,
