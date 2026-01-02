@@ -1,3 +1,4 @@
+// components/QRScanner.tsx
 import { Camera, CameraView } from "expo-camera";
 import React, { useEffect, useState } from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";

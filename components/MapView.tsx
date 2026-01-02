@@ -39,7 +39,7 @@ export const MapView: React.FC<MapViewProps> = ({
   onNodePress,
   currentLocation,
 }) => {
-  // State for transformation
+  // States
   const [scale, setScale] = useState(1);
   const [translateX, setTranslateX] = useState(0);
   const [translateY, setTranslateY] = useState(0);
@@ -47,7 +47,6 @@ export const MapView: React.FC<MapViewProps> = ({
   const [lastTranslateX, setLastTranslateX] = useState(0);
   const [lastTranslateY, setLastTranslateY] = useState(0);
 
-  // Refs for gesture handling
   const touchStartRef = useRef({ x1: 0, y1: 0, x2: 0, y2: 0 });
   const isPinchingRef = useRef(false);
   const initialDistanceRef = useRef(0);
@@ -75,10 +74,10 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapCenterX = (bounds.minX + bounds.maxX) / 2;
   const mapCenterY = (bounds.minY + bounds.maxY) / 2;
 
-  // Initialize map to show everything
+  // Initialize map
   useEffect(() => {
     if (nodes.length > 0 && mapWidth > 0 && mapHeight > 0) {
-      // Calculate scale to fit map in view
+      // Calculate scale
       const padding = 50;
       const scaleX = (width - padding * 2) / mapWidth;
       const scaleY = (height - padding * 2) / mapHeight;
@@ -132,12 +131,10 @@ export const MapView: React.FC<MapViewProps> = ({
     const touches = event.nativeEvent.touches;
 
     if (touches.length === 1) {
-      // Single touch for panning
       isPinchingRef.current = false;
       setLastTranslateX(translateX);
       setLastTranslateY(translateY);
     } else if (touches.length === 2) {
-      // Two touches for pinching
       isPinchingRef.current = true;
       const touch1 = touches[0];
       const touch2 = touches[1];
@@ -157,7 +154,6 @@ export const MapView: React.FC<MapViewProps> = ({
       );
       initialScaleRef.current = scale;
 
-      // Calculate initial midpoint
       const midpoint = calculateMidpoint(
         touch1.pageX,
         touch1.pageY,
@@ -202,7 +198,6 @@ export const MapView: React.FC<MapViewProps> = ({
           touch2.pageY
         );
 
-        // Calculate new translation to zoom around the midpoint
         const scaleRatio = newScale / initialScaleRef.current;
         const newTranslateX =
           midpoint.x -
@@ -229,7 +224,6 @@ export const MapView: React.FC<MapViewProps> = ({
       setScale(clampedScale);
     }
 
-    // Ensure map stays within bounds
     const maxTranslateX = width * 0.8;
     const maxTranslateY = height * 0.8;
     const minTranslateX = -mapWidth * clampedScale + width * 0.2;
@@ -244,7 +238,6 @@ export const MapView: React.FC<MapViewProps> = ({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only respond to single touch moves when not pinching
         return gestureState.numberActiveTouches === 1 && !isPinchingRef.current;
       },
       onPanResponderGrant: () => {
@@ -260,7 +253,6 @@ export const MapView: React.FC<MapViewProps> = ({
         }
       },
       onPanResponderRelease: () => {
-        // Clamp translation after release
         const maxTranslateX = width * 0.8;
         const maxTranslateY = height * 0.8;
         const minTranslateX = -mapWidth * scale + width * 0.2;
@@ -308,7 +300,6 @@ export const MapView: React.FC<MapViewProps> = ({
   const resetView = () => {
     if (mapWidth === 0 || mapHeight === 0) return;
 
-    // Calculate scale to fit map in view
     const padding = 50;
     const scaleX = (width - padding * 2) / mapWidth;
     const scaleY = (height - padding * 2) / mapHeight;
@@ -397,7 +388,6 @@ export const MapView: React.FC<MapViewProps> = ({
     );
   };
 
-  // Create mall floor structure
   const renderMallStructure = () => {
     const leftBound = bounds.minX;
     const rightBound = bounds.maxX;
@@ -498,12 +488,10 @@ export const MapView: React.FC<MapViewProps> = ({
           <G
             transform={`translate(${translateX}, ${translateY}) scale(${scale})`}
           >
-            {/* Mall structure background */}
             {renderMallStructure()}
 
             {/* Draw edges */}
             {edges
-              .filter((edge) => edge.accessible)
               .map((edge, index) => {
                 const fromNode = nodes.find((n) => n.node_id === edge.from);
                 const toNode = nodes.find((n) => n.node_id === edge.to);
@@ -522,7 +510,6 @@ export const MapView: React.FC<MapViewProps> = ({
                     stroke={pathEdge ? "url(#pathGradient)" : "#E2E8F0"}
                     strokeWidth={pathEdge ? 6 : 4}
                     strokeLinecap="round"
-                    strokeDasharray={edge.accessible ? "none" : "5,3"}
                   />
                 );
               })}
@@ -584,7 +571,6 @@ export const MapView: React.FC<MapViewProps> = ({
                   key={node.node_id}
                   onPress={() => onNodePress && onNodePress(node)}
                 >
-                  {/* Glow effect for important nodes */}
                   {(isCurrent || isDestination) && (
                     <Circle
                       cx={node.x}
@@ -622,7 +608,6 @@ export const MapView: React.FC<MapViewProps> = ({
                     {getNodeIcon(node.type)}
                   </SvgText>
 
-                  {/* Node label - show based on zoom level */}
                   {scale > 0.3 && (
                     <>
                       <SvgText
@@ -639,7 +624,6 @@ export const MapView: React.FC<MapViewProps> = ({
                         {node.label}
                       </SvgText>
 
-                      {/* Type label - show when zoomed in more */}
                       {scale > 0.5 && (
                         <SvgText
                           x={node.x}

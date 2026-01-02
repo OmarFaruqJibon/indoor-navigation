@@ -1,3 +1,4 @@
+// app/index.tsx
 import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -17,8 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MapView } from "../components/MapView";
 import { QRScanner } from "../components/QRScanner";
-import edgesData from "../data/edges.json";
-import nodesData from "../data/nodes.json";
+import { generateMultiFloorData } from "../utils/dataGenerator";
 import { Edge, Graph, Node } from "../utils/dijkstra";
 
 const { width, height } = Dimensions.get("window");
@@ -33,30 +33,32 @@ export default function Index() {
   const [distance, setDistance] = useState<number>(0);
   const [showScanner, setShowScanner] = useState(false);
   const [showDestinations, setShowDestinations] = useState(false);
-  const [accessibleOnly, setAccessibleOnly] = useState(true);
   const [loading, setLoading] = useState(true);
   const [estimatedTime, setEstimatedTime] = useState<number>(0);
   const [showInstructions, setShowInstructions] = useState(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [currentFloor, setCurrentFloor] = useState<number | null>(null);
+  const [targetFloor, setTargetFloor] = useState<number | null>(null);
+  const [floorChangeMessage, setFloorChangeMessage] = useState<string>("");
+  const [showFloorSelector, setShowFloorSelector] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(300)).current;
 
   useEffect(() => {
-    // Initialize graph
     const initGraph = () => {
       try {
-        setNodes(nodesData as Node[]);
-        setEdges(edgesData as Edge[]);
+        const { nodes: generatedNodes, edges: generatedEdges } = generateMultiFloorData();
+
+        setNodes(generatedNodes);
+        setEdges(generatedEdges);
         const newGraph = new Graph(
-          nodesData as Node[],
-          edgesData as Edge[],
-          accessibleOnly
+          generatedNodes,
+          generatedEdges
         );
         setGraph(newGraph);
         setLoading(false);
 
-        // Start animations
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 1,
@@ -76,7 +78,7 @@ export default function Index() {
     };
 
     initGraph();
-  }, [accessibleOnly]);
+  }, []);
 
   useEffect(() => {
     if (graph && currentLocation && destination) {
@@ -85,6 +87,26 @@ export default function Index() {
         setPath(result.path);
         setDistance(result.distance);
         setEstimatedTime(Math.ceil(result.distance / 50));
+
+        if (result.floorChange) {
+          setTargetFloor(result.targetFloor || null);
+          setFloorChangeMessage(result.message || "");
+          Alert.alert(
+            "Floor Change Required",
+            result.message || `Please go to floor ${result.targetFloor}`,
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  setFloorChangeMessage(result.message || "");
+                }
+              }
+            ]
+          );
+        } else {
+          setTargetFloor(null);
+          setFloorChangeMessage("");
+        }
       } else {
         Alert.alert(
           "No Path Found",
@@ -93,6 +115,8 @@ export default function Index() {
         setPath([]);
         setDistance(0);
         setEstimatedTime(0);
+        setTargetFloor(null);
+        setFloorChangeMessage("");
       }
     }
   }, [graph, currentLocation, destination]);
@@ -104,6 +128,32 @@ export default function Index() {
       try {
         const parsed = JSON.parse(nodeId);
         nodeId = parsed.node_id || nodeId;
+        const floor = parsed.floor || 1;
+
+        const node = graph?.getNode(nodeId);
+        if (node) {
+          setCurrentLocation(nodeId);
+          setCurrentFloor(node.floor);
+          setShowScanner(false);
+
+          Animated.sequence([
+            Animated.timing(slideAnim, {
+              toValue: 300,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(slideAnim, {
+              toValue: 0,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+          ]).start();
+
+          setTimeout(() => setShowDestinations(true), 500);
+        } else {
+          Alert.alert("Invalid QR Code", `Node "${nodeId}" not found in the map.`);
+        }
+        return;
       } catch (e) {
         console.log("QR data is not JSON, using as-is");
       }
@@ -116,6 +166,7 @@ export default function Index() {
     const node = graph?.getNode(nodeId);
     if (node) {
       setCurrentLocation(nodeId);
+      setCurrentFloor(node.floor);
       setShowScanner(false);
 
       Animated.sequence([
@@ -156,30 +207,39 @@ export default function Index() {
     setPath([]);
     setDistance(0);
     setEstimatedTime(0);
+    setTargetFloor(null);
+    setFloorChangeMessage("");
     setSearchQuery("");
   };
 
   const resetNavigation = () => {
     setCurrentLocation(null);
+    setCurrentFloor(null);
     setDestination(null);
     setPath([]);
     setDistance(0);
     setEstimatedTime(0);
     setShowDestinations(false);
     setSearchQuery("");
+    setTargetFloor(null);
+    setFloorChangeMessage("");
+  };
+
+  const getCurrentFloorNodes = (): Node[] => {
+    if (!currentFloor) return [];
+    return nodes.filter(node => node.floor === currentFloor);
   };
 
   const getDestinationNodes = (): Node[] => {
-    if (!currentLocation) return [];
-    return nodes.filter(
-      (node) =>
-        node.node_id !== currentLocation &&
-        node.type !== "junction" &&
-        node.type !== "stair"
+    if (!currentLocation || !currentFloor) return [];
+
+    return nodes.filter((node) =>
+      node.node_id !== currentLocation &&
+      node.type !== 'junction' &&
+      node.type !== 'stair'
     );
   };
 
-  // Filter nodes
   const getFilteredNodes = (): Node[] => {
     const destinationNodes = getDestinationNodes();
 
@@ -292,6 +352,41 @@ export default function Index() {
     setSearchQuery("");
   };
 
+  // Get floors list
+  const getFloors = (): number[] => {
+    if (!graph) return [];
+    return graph.getFloors();
+  };
+
+  const getNodesForCurrentMap = (): Node[] => {
+    if (!currentFloor) return nodes;
+    return nodes.filter(node => node.floor === currentFloor);
+  };
+
+  // Handle floor selection
+  const handleFloorSelect = (floor: number) => {
+    if (currentFloor !== floor) {
+      Alert.alert(
+        "Switch Floor",
+        `Switch to floor ${floor}? You'll need to scan a QR code on that floor to continue.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Switch",
+            onPress: () => {
+              setShowFloorSelector(false);
+              Alert.alert(
+                "Go to Floor",
+                `Please go to floor ${floor} and scan a QR code to continue navigation.`,
+                [{ text: "OK" }]
+              );
+            }
+          }
+        ]
+      );
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -299,7 +394,7 @@ export default function Index() {
           <ActivityIndicator size="large" color="#4A6FA5" />
           <Text style={styles.loadingText}>Loading Mall Map...</Text>
           <Text style={styles.loadingSubtext}>
-            Preparing your navigation experience
+            Preparing multi-floor navigation
           </Text>
         </View>
       </View>
@@ -312,23 +407,29 @@ export default function Index() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
+
           <View style={styles.headerContent}>
             <View>
-              <Text style={styles.title}>Mall Navigator</Text>
-              <Text style={styles.subtitle}>Find your way around easily</Text>
+              <Text style={styles.title}>Navigator</Text>
+              <Text style={styles.subtitle}>
+                {currentFloor ? `Floor ${currentFloor}` : "Multi-floor Navigation"}
+              </Text>
             </View>
+            
             <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={[styles.iconButton, styles.accessibilityButton]}
-                onPress={() => setAccessibleOnly(!accessibleOnly)}
-              >
-                <MaterialIcons
-                  name="accessible"
-                  size={22}
-                  color={accessibleOnly ? "#2A9D8F" : "#6C757D"}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
+              <View>
+              {currentFloor && (
+                <TouchableOpacity
+                  style={[styles.iconButton, styles.floorButton]}
+                  onPress={() => setShowFloorSelector(true)}
+                >
+                  <Ionicons name="business" size={22} color="#4A6FA5" />
+                  <Text style={styles.floorText}>{currentFloor}</Text>
+                </TouchableOpacity>
+              )}
+
+            </View>
+            <TouchableOpacity
                 style={[styles.iconButton, styles.infoButton]}
                 onPress={() => setShowInstructions(true)}
               >
@@ -339,7 +440,11 @@ export default function Index() {
                 />
               </TouchableOpacity>
             </View>
+
+
           </View>
+
+
         </Animated.View>
 
         <Animated.View
@@ -359,23 +464,35 @@ export default function Index() {
                   <Text style={styles.currentLocationText}>
                     You are at: {getCurrentNode()?.label}
                   </Text>
+                  {currentFloor && (
+                    <View style={styles.floorBadge}>
+                      <Text style={styles.floorBadgeText}>Floor {currentFloor}</Text>
+                    </View>
+                  )}
                 </View>
-                <TouchableOpacity
+                {/* <TouchableOpacity
                   onPress={resetNavigation}
                   style={styles.resetBtn}
                 >
                   <Ionicons name="refresh" size={18} color="#6C757D" />
                   <Text style={styles.resetText}>Reset</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
 
               {destination ? (
                 <View style={styles.navigationInfo}>
                   <View style={styles.destinationRow}>
                     <Ionicons name="flag" size={20} color="#E63946" />
-                    <Text style={styles.destinationText}>
-                      Heading to: {getDestinationNode()?.label}
-                    </Text>
+                    <View style={styles.destinationInfo}>
+                      <Text style={styles.destinationText}>
+                        {getDestinationNode()?.label}
+                      </Text>
+                      {getDestinationNode()?.floor && (
+                        <Text style={styles.destinationFloor}>
+                          Floor {getDestinationNode()?.floor}
+                        </Text>
+                      )}
+                    </View>
                     <TouchableOpacity
                       onPress={clearDestination}
                       style={styles.clearBtn}
@@ -384,57 +501,89 @@ export default function Index() {
                     </TouchableOpacity>
                   </View>
 
-                  <View style={styles.statsContainer}>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statValue}>
-                        {distance.toFixed(1)} m
-                      </Text>
-                      <Text style={styles.statLabel}>Distance</Text>
-                    </View>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statValue}>{estimatedTime} min</Text>
-                      <Text style={styles.statLabel}>Est. Time</Text>
-                    </View>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statValue}>{path.length - 1}</Text>
-                      <Text style={styles.statLabel}>Steps</Text>
-                    </View>
-                  </View>
-
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.pathContainer}
-                  >
-                    {path.map((nodeId, index) => (
-                      <View key={nodeId} style={styles.pathStep}>
-                        {index > 0 && (
-                          <Ionicons
-                            name="chevron-forward"
-                            size={16}
-                            color="#6C757D"
-                            style={styles.pathArrow}
-                          />
-                        )}
-                        <View
-                          style={[
-                            styles.pathDot,
-                            {
-                              backgroundColor:
-                                index === 0
-                                  ? "#2A9D8F"
-                                  : index === path.length - 1
-                                  ? "#E63946"
-                                  : "#4A6FA5",
-                            },
-                          ]}
-                        />
-                        <Text style={styles.pathStepText}>
-                          {graph?.getNode(nodeId)?.label || nodeId}
+                  {floorChangeMessage ? (
+                    <View style={styles.floorChangeAlert}>
+                      <Ionicons name="alert-circle" size={24} color="#FF9800" />
+                      <View style={styles.floorChangeMessage}>
+                        <Text style={styles.floorChangeTitle}>
+                          Floor Change Required
                         </Text>
+                        <Text style={styles.floorChangeText}>
+                          {floorChangeMessage}
+                        </Text>
+                        {targetFloor && (
+                          <TouchableOpacity
+                            style={styles.goToFloorButton}
+                            onPress={() => {
+                              Alert.alert(
+                                "Navigate to Floor",
+                                `Please go to floor ${targetFloor} and scan a QR code.`,
+                                [{ text: "OK" }]
+                              );
+                            }}
+                          >
+                            <Text style={styles.goToFloorText}>
+                              Go to Floor {targetFloor}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
-                    ))}
-                  </ScrollView>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={styles.statsContainer}>
+                        <View style={styles.statBox}>
+                          <Text style={styles.statValue}>
+                            {distance.toFixed(1)} m
+                          </Text>
+                          <Text style={styles.statLabel}>Distance</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={styles.statValue}>{estimatedTime} min</Text>
+                          <Text style={styles.statLabel}>Est. Time</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={styles.statValue}>{path.length - 1}</Text>
+                          <Text style={styles.statLabel}>Steps</Text>
+                        </View>
+                      </View>
+
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.pathContainer}
+                      >
+                        {path.map((nodeId, index) => (
+                          <View key={nodeId} style={styles.pathStep}>
+                            {index > 0 && (
+                              <Ionicons
+                                name="chevron-forward"
+                                size={16}
+                                color="#6C757D"
+                                style={styles.pathArrow}
+                              />
+                            )}
+                            <View
+                              style={[
+                                styles.pathDot,
+                                {
+                                  backgroundColor:
+                                    index === 0
+                                      ? "#2A9D8F"
+                                      : index === path.length - 1
+                                        ? "#E63946"
+                                        : "#4A6FA5",
+                                },
+                              ]}
+                            />
+                            <Text style={styles.pathStepText}>
+                              {graph?.getNode(nodeId)?.label || nodeId}
+                            </Text>
+                          </View>
+                        ))}
+                      </ScrollView>
+                    </>
+                  )}
                 </View>
               ) : (
                 <TouchableOpacity
@@ -451,7 +600,7 @@ export default function Index() {
           ) : (
             <View style={styles.welcomeContent}>
               <Ionicons
-                name="map"
+                name="layers"
                 size={48}
                 color="#4A6FA5"
                 style={styles.welcomeIcon}
@@ -474,15 +623,30 @@ export default function Index() {
         {/* Map Container */}
         <View style={styles.mapContainer}>
           <View style={styles.mapHeader}>
-            <Text style={styles.mapTitle}>Mall Map</Text>
+            <View style={styles.mapTitleRow}>
+              <Text style={styles.mapTitle}>
+                {currentFloor ? `Floor ${currentFloor} Map` : "Mall Map"}
+              </Text>
+              {currentFloor && (
+                <TouchableOpacity
+                  style={styles.floorSelectorButton}
+                  onPress={() => setShowFloorSelector(true)}
+                >
+                  <Text style={styles.floorSelectorText}>Change Floor</Text>
+                  <Ionicons name="chevron-down" size={16} color="#4A6FA5" />
+                </TouchableOpacity>
+              )}
+            </View>
             <Text style={styles.mapSubtitle}>
-              Floor 1 • Tap locations to navigate
+              {currentFloor
+                ? "Tap locations to navigate • Zoom & pan to explore"
+                : "Scan QR code to see specific floor map"}
             </Text>
           </View>
           <View style={styles.mapWrapper}>
             <MapView
-              nodes={nodes}
-              edges={edges.filter((edge) => !accessibleOnly || edge.accessible)}
+              nodes={getNodesForCurrentMap()}
+              edges={edges}
               path={path}
               currentLocation={getCurrentNode()}
               onNodePress={(node) => {
@@ -533,23 +697,6 @@ export default function Index() {
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => setAccessibleOnly(!accessibleOnly)}
-            >
-              <View
-                style={[
-                  styles.actionIcon,
-                  { backgroundColor: accessibleOnly ? "#2A9D8F" : "#6C757D" },
-                ]}
-              >
-                <MaterialIcons name="accessible" size={24} color="#FFFFFF" />
-              </View>
-              <Text style={styles.actionText}>
-                {accessibleOnly ? "Accessible" : "All Routes"}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
               onPress={resetNavigation}
             >
               <View style={[styles.actionIcon, { backgroundColor: "#E76F51" }]}>
@@ -578,311 +725,415 @@ export default function Index() {
         onScan={handleQRScan}
       />
 
-      {/* Destinations Modal with Search */}
-      <Modal
+      {/* Destinations Modal */}
+      <DestinationModal
         visible={showDestinations}
+        onClose={handleModalClose}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        filteredNodes={getFilteredNodes()}
+        groupNodesByType={groupNodesByType}
+        getCategoryIcon={getCategoryIcon}
+        getTypeColor={getTypeColor}
+        getTypeLabel={getTypeLabel}
+        getTypeIcon={getTypeIcon}
+        destination={destination}
+        handleDestinationSelect={handleDestinationSelect}
+        currentFloor={currentFloor}
+      />
+
+      {/* Floor Selector Modal */}
+      <Modal
+        visible={showFloorSelector}
         animationType="slide"
         transparent={true}
-        onRequestClose={handleModalClose}
+        onRequestClose={() => setShowFloorSelector(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { maxHeight: "60%" }]}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Select Destination</Text>
+                <Text style={styles.modalTitle}>Select Floor</Text>
                 <Text style={styles.modalSubtitle}>
-                  Where would you like to go?
+                  Choose floor to navigate
                 </Text>
               </View>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
-                onPress={handleModalClose}
+                onPress={() => setShowFloorSelector(false)}
               >
                 <Ionicons name="close" size={28} color="#6C757D" />
               </TouchableOpacity>
             </View>
 
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-              <View style={styles.searchInputContainer}>
-                <Ionicons
-                  name="search"
-                  size={20}
-                  color="#6C757D"
-                  style={styles.searchIcon}
-                />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search destinations..."
-                  placeholderTextColor="#999"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.clearSearchButton}
-                    onPress={() => setSearchQuery("")}
-                  >
-                    <Ionicons name="close-circle" size={20} color="#999" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            <ScrollView
-              style={styles.destinationsList}
-              showsVerticalScrollIndicator={false}
-            >
-              {(() => {
-                const filteredNodes = getFilteredNodes();
-
-                if (filteredNodes.length === 0) {
-                  return (
-                    <View style={styles.noResultsContainer}>
+            <ScrollView style={styles.floorList}>
+              {getFloors().map((floor) => (
+                <TouchableOpacity
+                  key={floor}
+                  style={[
+                    styles.floorItem,
+                    currentFloor === floor && styles.selectedFloorItem,
+                  ]}
+                  onPress={() => handleFloorSelect(floor)}
+                >
+                  <View style={styles.floorItemContent}>
+                    <View style={styles.floorIcon}>
                       <Ionicons
-                        name="search-outline"
-                        size={48}
-                        color="#CBD5E1"
+                        name="business"
+                        size={24}
+                        color={currentFloor === floor ? "#4A6FA5" : "#6C757D"}
                       />
-                      <Text style={styles.noResultsTitle}>
-                        No results found
+                    </View>
+                    <View style={styles.floorInfo}>
+                      <Text style={[
+                        styles.floorNumber,
+                        currentFloor === floor && styles.selectedFloorNumber
+                      ]}>
+                        Floor {floor}
                       </Text>
-                      <Text style={styles.noResultsText}>
-                        {searchQuery
-                          ? `No destinations matching "${searchQuery}"`
-                          : "No destinations available"}
+                      <Text style={styles.floorDescription}>
+                        {floor === 1 ? "Main Entrance • Food Court" :
+                          floor === 2 ? "Electronics • Fashion" :
+                            floor === 3 ? "Home Decor • Furniture" :
+                              floor === 4 ? "Sports • Toys" :
+                                floor === 5 ? "Beauty • Health" :
+                                  floor === 6 ? "Books • Stationery" :
+                                    floor === 7 ? "Restaurants • Dining" :
+                                      floor === 8 ? "Cinema • Entertainment" :
+                                        floor === 9 ? "Office Supplies • Business" :
+                                          floor === 10 ? "Observation Deck • Services" : "Shopping Floor"}
                       </Text>
                     </View>
-                  );
-                }
-
-                if (searchQuery) {
-                  return (
-                    <View style={styles.searchResultsSection}>
-                      <View style={styles.categoryHeader}>
-                        <FontAwesome5 name="search" size={18} color="#4A6FA5" />
-                        <Text style={styles.categoryTitle}>
-                          Search Results ({filteredNodes.length})
-                        </Text>
+                    {currentFloor === floor && (
+                      <View style={styles.currentFloorBadge}>
+                        <Text style={styles.currentFloorBadgeText}>Current</Text>
                       </View>
-                      <View style={styles.destinationsGrid}>
-                        {filteredNodes.map((node) => (
-                          <TouchableOpacity
-                            key={node.node_id}
-                            style={[
-                              styles.destinationCard,
-                              destination === node.node_id &&
-                                styles.selectedDestinationCard,
-                            ]}
-                            onPress={() => handleDestinationSelect(node)}
-                          >
-                            <View
-                              style={[
-                                styles.destinationIcon,
-                                { backgroundColor: getTypeColor(node.type) },
-                              ]}
-                            >
-                              <MaterialIcons
-                                name={getTypeIcon(node.type)}
-                                size={20}
-                                color="#FFFFFF"
-                              />
-                            </View>
-                            <Text
-                              style={styles.destinationName}
-                              numberOfLines={2}
-                            >
-                              {node.label}
-                            </Text>
-                            <Text style={styles.destinationType}>
-                              {node.type.charAt(0).toUpperCase() +
-                                node.type.slice(1)}
-                            </Text>
-                            {destination === node.node_id && (
-                              <View style={styles.selectedBadge}>
-                                <Ionicons
-                                  name="checkmark"
-                                  size={16}
-                                  color="#FFFFFF"
-                                />
-                              </View>
-                            )}
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  );
-                } else {
-                  const groupedNodes = groupNodesByType(filteredNodes);
-
-                  return Object.entries(groupedNodes).map(
-                    ([type, typeNodes]) => (
-                      <View key={type} style={styles.categorySection}>
-                        <View style={styles.categoryHeader}>
-                          <FontAwesome5
-                            name={getCategoryIcon(type)}
-                            size={18}
-                            color={getTypeColor(type)}
-                          />
-                          <Text style={styles.categoryTitle}>
-                            {getTypeLabel(type)}
-                          </Text>
-                          <Text style={styles.categoryCount}>
-                            ({typeNodes.length})
-                          </Text>
-                        </View>
-
-                        <View style={styles.destinationsGrid}>
-                          {typeNodes.map((node) => (
-                            <TouchableOpacity
-                              key={node.node_id}
-                              style={[
-                                styles.destinationCard,
-                                destination === node.node_id &&
-                                  styles.selectedDestinationCard,
-                              ]}
-                              onPress={() => handleDestinationSelect(node)}
-                            >
-                              <View
-                                style={[
-                                  styles.destinationIcon,
-                                  { backgroundColor: getTypeColor(node.type) },
-                                ]}
-                              >
-                                <MaterialIcons
-                                  name={getTypeIcon(node.type)}
-                                  size={20}
-                                  color="#FFFFFF"
-                                />
-                              </View>
-                              <Text
-                                style={styles.destinationName}
-                                numberOfLines={2}
-                              >
-                                {node.label}
-                              </Text>
-                              <Text style={styles.destinationType}>
-                                {node.type.charAt(0).toUpperCase() +
-                                  node.type.slice(1)}
-                              </Text>
-                              {destination === node.node_id && (
-                                <View style={styles.selectedBadge}>
-                                  <Ionicons
-                                    name="checkmark"
-                                    size={16}
-                                    color="#FFFFFF"
-                                  />
-                                </View>
-                              )}
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-                    )
-                  );
-                }
-              })()}
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </View>
         </View>
       </Modal>
 
       {/* Instructions Modal */}
-      <Modal
+      <InstructionsModal
         visible={showInstructions}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowInstructions(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: "80%" }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>How to Use</Text>
-                <Text style={styles.modalSubtitle}>Mall Navigator Guide</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setShowInstructions(false)}
-              >
-                <Ionicons name="close" size={28} color="#6C757D" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.instructionsList}>
-              <View style={styles.instructionItem}>
-                <View style={styles.instructionIcon}>
-                  <Ionicons name="qr-code" size={24} color="#4A6FA5" />
-                </View>
-                <View style={styles.instructionContent}>
-                  <Text style={styles.instructionTitle}>1. Scan QR Code</Text>
-                  <Text style={styles.instructionText}>
-                    Find and scan QR codes placed throughout the mall to set
-                    your current location.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.instructionItem}>
-                <View style={styles.instructionIcon}>
-                  <Ionicons name="navigate" size={24} color="#2A9D8F" />
-                </View>
-                <View style={styles.instructionContent}>
-                  <Text style={styles.instructionTitle}>
-                    2. Choose Destination
-                  </Text>
-                  <Text style={styles.instructionText}>
-                    Select where you want to go from the destinations list or
-                    tap on the map.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.instructionItem}>
-                <View style={styles.instructionIcon}>
-                  <Ionicons name="map" size={24} color="#E76F51" />
-                </View>
-                <View style={styles.instructionContent}>
-                  <Text style={styles.instructionTitle}>
-                    3. Follow the Path
-                  </Text>
-                  <Text style={styles.instructionText}>
-                    Follow the highlighted route on the map. Distance and
-                    estimated time are shown.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.instructionItem}>
-                <View style={styles.instructionIcon}>
-                  <MaterialIcons name="accessible" size={24} color="#9D4EDD" />
-                </View>
-                <View style={styles.instructionContent}>
-                  <Text style={styles.instructionTitle}>
-                    4. Accessible Routes
-                  </Text>
-                  <Text style={styles.instructionText}>
-                    Toggle the accessibility icon to show only
-                    wheelchair-accessible routes.
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.gotItButton}
-              onPress={() => setShowInstructions(false)}
-            >
-              <Text style={styles.gotItButtonText}>Got It!</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowInstructions(false)}
+      />
     </SafeAreaView>
   );
 }
+
+// Destination Modal Component
+const DestinationModal = ({
+  visible,
+  onClose,
+  searchQuery,
+  setSearchQuery,
+  filteredNodes,
+  groupNodesByType,
+  getCategoryIcon,
+  getTypeColor,
+  getTypeLabel,
+  getTypeIcon,
+  destination,
+  handleDestinationSelect,
+  currentFloor,
+}: any) => (
+  <Modal
+    visible={visible}
+    animationType="slide"
+    transparent={true}
+    onRequestClose={onClose}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <View>
+            <Text style={styles.modalTitle}>Select Destination</Text>
+            <Text style={styles.modalSubtitle}>
+              {currentFloor ? `Current Floor: ${currentFloor}` : "Choose where to go"}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.modalCloseBtn}
+            onPress={onClose}
+          >
+            <Ionicons name="close" size={28} color="#6C757D" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputContainer}>
+            <Ionicons
+              name="search"
+              size={20}
+              color="#6C757D"
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search destinations..."
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearSearchButton}
+                onPress={() => setSearchQuery("")}
+              >
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        <ScrollView
+          style={styles.destinationsList}
+          showsVerticalScrollIndicator={false}
+        >
+          {filteredNodes.length === 0 ? (
+            <View style={styles.noResultsContainer}>
+              <Ionicons
+                name="search-outline"
+                size={48}
+                color="#CBD5E1"
+              />
+              <Text style={styles.noResultsTitle}>No results found</Text>
+              <Text style={styles.noResultsText}>
+                {searchQuery
+                  ? `No destinations matching "${searchQuery}"`
+                  : "No destinations available"}
+              </Text>
+            </View>
+          ) : searchQuery ? (
+            <View style={styles.searchResultsSection}>
+              <View style={styles.categoryHeader}>
+                <FontAwesome5
+                  name="search"
+                  size={18}
+                  color="#4A6FA5"
+                />
+                <Text style={styles.categoryTitle}>
+                  Search Results ({filteredNodes.length})
+                </Text>
+              </View>
+              <View style={styles.destinationsGrid}>
+                {filteredNodes.map((node: Node) => (
+                  <TouchableOpacity
+                    key={node.node_id}
+                    style={[
+                      styles.destinationCard,
+                      destination === node.node_id &&
+                      styles.selectedDestinationCard,
+                    ]}
+                    onPress={() => handleDestinationSelect(node)}
+                  >
+                    <View
+                      style={[
+                        styles.destinationIcon,
+                        { backgroundColor: getTypeColor(node.type) },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={getTypeIcon(node.type)}
+                        size={20}
+                        color="#FFFFFF"
+                      />
+                    </View>
+                    <Text
+                      style={styles.destinationName}
+                      numberOfLines={2}
+                    >
+                      {node.label}
+                    </Text>
+                    <Text style={styles.destinationType}>
+                      Floor {node.floor}
+                    </Text>
+                    {destination === node.node_id && (
+                      <View style={styles.selectedBadge}>
+                        <Ionicons
+                          name="checkmark"
+                          size={16}
+                          color="#FFFFFF"
+                        />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : (
+            Object.entries(groupNodesByType(filteredNodes)).map(([type, typeNodes]: [string, any]) => (
+              <View key={type} style={styles.categorySection}>
+                <View style={styles.categoryHeader}>
+                  <FontAwesome5
+                    name={getCategoryIcon(type)}
+                    size={18}
+                    color={getTypeColor(type)}
+                  />
+                  <Text style={styles.categoryTitle}>
+                    {getTypeLabel(type)}
+                  </Text>
+                  <Text style={styles.categoryCount}>
+                    ({typeNodes.length})
+                  </Text>
+                </View>
+
+                <View style={styles.destinationsGrid}>
+                  {typeNodes.map((node: Node) => (
+                    <TouchableOpacity
+                      key={node.node_id}
+                      style={[
+                        styles.destinationCard,
+                        destination === node.node_id &&
+                        styles.selectedDestinationCard,
+                      ]}
+                      onPress={() => handleDestinationSelect(node)}
+                    >
+                      <View
+                        style={[
+                          styles.destinationIcon,
+                          { backgroundColor: getTypeColor(node.type) },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name={getTypeIcon(node.type)}
+                          size={20}
+                          color="#FFFFFF"
+                        />
+                      </View>
+                      <Text
+                        style={styles.destinationName}
+                        numberOfLines={2}
+                      >
+                        {node.label}
+                      </Text>
+                      <Text style={styles.destinationType}>
+                        Floor {node.floor}
+                      </Text>
+                      {destination === node.node_id && (
+                        <View style={styles.selectedBadge}>
+                          <Ionicons
+                            name="checkmark"
+                            size={16}
+                            color="#FFFFFF"
+                          />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </View>
+    </View>
+  </Modal>
+);
+
+// Instructions Modal Component
+const InstructionsModal = ({ visible, onClose }: any) => (
+  <Modal
+    visible={visible}
+    animationType="slide"
+    transparent={true}
+    onRequestClose={onClose}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={[styles.modalContent, { maxHeight: "80%" }]}>
+        <View style={styles.modalHeader}>
+          <View>
+            <Text style={styles.modalTitle}>How to Use</Text>
+            <Text style={styles.modalSubtitle}>Multi-floor Navigation Guide</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.modalCloseBtn}
+            onPress={onClose}
+          >
+            <Ionicons name="close" size={28} color="#6C757D" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.instructionsList}>
+          <View style={styles.instructionItem}>
+            <View style={styles.instructionIcon}>
+              <Ionicons name="qr-code" size={24} color="#4A6FA5" />
+            </View>
+            <View style={styles.instructionContent}>
+              <Text style={styles.instructionTitle}>1. Scan QR Code</Text>
+              <Text style={styles.instructionText}>
+                Find and scan QR codes placed throughout the mall to set your current location and floor.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.instructionItem}>
+            <View style={styles.instructionIcon}>
+              <Ionicons name="layers" size={24} color="#2A9D8F" />
+            </View>
+            <View style={styles.instructionContent}>
+              <Text style={styles.instructionTitle}>2. Multi-floor Navigation</Text>
+              <Text style={styles.instructionText}>
+                The app automatically detects floor changes. If your destination is on another floor, it will guide you to the nearest stairs.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.instructionItem}>
+            <View style={styles.instructionIcon}>
+              <Ionicons name="navigate" size={24} color="#E76F51" />
+            </View>
+            <View style={styles.instructionContent}>
+              <Text style={styles.instructionTitle}>3. Choose Destination</Text>
+              <Text style={styles.instructionText}>
+                Select where you want to go from the destinations list or tap on the map. The app shows which floor each destination is on.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.instructionItem}>
+            <View style={styles.instructionIcon}>
+              <Ionicons name="business" size={24} color="#9D4EDD" />
+            </View>
+            <View style={styles.instructionContent}>
+              <Text style={styles.instructionTitle}>4. Change Floors</Text>
+              <Text style={styles.instructionText}>
+                Use the floor selector to switch between floors. Scan a QR code on the new floor to continue navigation.
+              </Text>
+            </View>
+          </View>
+
+          {/* <View style={styles.instructionItem}>
+            <View style={styles.instructionIcon}>
+              <MaterialIcons name="accessible" size={24} color="#FF9800" />
+            </View>
+            <View style={styles.instructionContent}>
+              <Text style={styles.instructionTitle}>5. Accessible Routes</Text>
+              <Text style={styles.instructionText}>
+                Toggle the accessibility icon to show only wheelchair-accessible routes across all floors.
+              </Text>
+            </View>
+          </View> */}
+        </ScrollView>
+
+        <TouchableOpacity
+          style={styles.gotItButton}
+          onPress={onClose}
+        >
+          <Text style={styles.gotItButtonText}>Got It!</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -927,6 +1178,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
   },
+
+
+
+
   title: {
     fontSize: 28,
     fontWeight: "700",
@@ -949,6 +1204,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F8F9FA",
+  },
+  floorButton: {
+    flexDirection: "row",
+    gap: 4,
+    backgroundColor: "#E8F4FF",
+  },
+  floorText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#4A6FA5",
   },
   accessibilityButton: {
     backgroundColor: "#E8F5E9",
@@ -986,6 +1251,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1A1A1A",
   },
+  floorBadge: {
+    backgroundColor: "#E8F4FF",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  floorBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4A6FA5",
+  },
   resetBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1008,14 +1285,56 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 20,
   },
+  destinationInfo: {
+    flex: 1,
+  },
   destinationText: {
     fontSize: 18,
     fontWeight: "600",
     color: "#1A1A1A",
-    flex: 1,
+  },
+  destinationFloor: {
+    fontSize: 14,
+    color: "#6C757D",
+    marginTop: 2,
   },
   clearBtn: {
     padding: 4,
+  },
+  floorChangeAlert: {
+    flexDirection: "row",
+    backgroundColor: "#FFF3E0",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    gap: 12,
+  },
+  floorChangeMessage: {
+    flex: 1,
+  },
+  floorChangeTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FF9800",
+    marginBottom: 4,
+  },
+  floorChangeText: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 20,
+  },
+  goToFloorButton: {
+    backgroundColor: "#4A6FA5",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  goToFloorText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
   statsContainer: {
     flexDirection: "row",
@@ -1135,15 +1454,34 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E9ECEF",
   },
+  mapTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
   mapTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: "#1A1A1A",
   },
+  floorSelectorButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F8F9FA",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  floorSelectorText: {
+    fontSize: 14,
+    color: "#4A6FA5",
+    fontWeight: "600",
+  },
   mapSubtitle: {
     fontSize: 14,
     color: "#6C757D",
-    marginTop: 4,
   },
   mapWrapper: {
     height: 500,
@@ -1247,6 +1585,7 @@ const styles = StyleSheet.create({
   modalCloseBtn: {
     padding: 4,
   },
+  // Search styles
   searchContainer: {
     paddingHorizontal: 20,
     paddingBottom: 16,
@@ -1349,6 +1688,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  // No results styles
   noResultsContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -1366,6 +1706,63 @@ const styles = StyleSheet.create({
     color: "#6C757D",
     textAlign: "center",
     maxWidth: "80%",
+  },
+  // Floor list styles
+  floorList: {
+    padding: 20,
+  },
+  floorItem: {
+    backgroundColor: "#F8F9FA",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  selectedFloorItem: {
+    borderColor: "#4A6FA5",
+    backgroundColor: "#E8F4FF",
+  },
+  floorItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  floorIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  floorInfo: {
+    flex: 1,
+  },
+  floorNumber: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1A1A1A",
+    marginBottom: 4,
+  },
+  selectedFloorNumber: {
+    color: "#4A6FA5",
+  },
+  floorDescription: {
+    fontSize: 14,
+    color: "#6C757D",
+    lineHeight: 20,
+  },
+  currentFloorBadge: {
+    backgroundColor: "#2A9D8F",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  currentFloorBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   instructionsList: {
     padding: 20,

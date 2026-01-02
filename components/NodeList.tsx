@@ -1,3 +1,4 @@
+// components/NodeList.tsx
 import React from "react";
 import {
   ScrollView,
