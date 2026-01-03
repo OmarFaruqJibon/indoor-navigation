@@ -1,5 +1,6 @@
+// components/MapView.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
   GestureResponderEvent,
@@ -29,6 +30,7 @@ interface MapViewProps {
   edges: Edge[];
   path: string[];
   onNodePress?: (node: Node) => void;
+  destination?: Node;
   currentLocation?: Node | null;
 }
 
@@ -37,6 +39,7 @@ export const MapView: React.FC<MapViewProps> = ({
   edges,
   path,
   onNodePress,
+  destination,
   currentLocation,
 }) => {
   // States
@@ -56,71 +59,121 @@ export const MapView: React.FC<MapViewProps> = ({
   const initialTranslateRef = useRef({ x: 0, y: 0 });
 
   // Extract unique floors from nodes
-  const availableFloors = Array.from(new Set(nodes.map(n => n.floor || 1))).sort((a, b) => a - b);
+  const availableFloors = useMemo(() => 
+    Array.from(new Set(nodes.map(n => n.floor || 1))).sort((a, b) => a - b),
+    [nodes]
+  );
 
-  // Filter nodes and edges for active floor
-  const floorNodes = React.useMemo(() => 
+  // Filter nodes for active floor
+  const floorNodes = useMemo(() => 
     nodes.filter(n => (n.floor || 1) === activeFloor), 
     [nodes, activeFloor]
   );
 
-  const floorEdges = React.useMemo(() => 
-    edges.filter(e => {
-      const fromNode = nodes.find(n => n.node_id === e.from);
-      const toNode = nodes.find(n => n.node_id === e.to);
-      return (fromNode?.floor || 1) === activeFloor && (toNode?.floor || 1) === activeFloor;
-    }), 
-    [edges, nodes, activeFloor]
-  );
+  // Filter edges where BOTH nodes are on active floor OR it's an inter-floor connection
+  const floorEdges = useMemo(() => {
+    return edges.filter(edge => {
+      const fromNode = nodes.find(n => n.node_id === edge.from);
+      const toNode = nodes.find(n => n.node_id === edge.to);
+      
+      if (!fromNode || !toNode) return false;
+      
+      // Check if both nodes are on active floor
+      const bothOnActiveFloor = (fromNode.floor || 1) === activeFloor && 
+                               (toNode.floor || 1) === activeFloor;
+      
+      // Check if it's an inter-floor connection (staircase)
+      const isStairConnection = (fromNode.type === 'stair' || toNode.type === 'stair') &&
+                               Math.abs((fromNode.floor || 1) - (toNode.floor || 1)) === 1;
+      
+      // Show if both on same floor OR it's a staircase connection to active floor
+      if (bothOnActiveFloor) {
+        return true;
+      }
+      
+      // For inter-floor connections, show if at least one node is on active floor
+      if (isStairConnection) {
+        const fromFloor = fromNode.floor || 1;
+        const toFloor = toNode.floor || 1;
+        return fromFloor === activeFloor || toFloor === activeFloor;
+      }
+      
+      return false;
+    });
+  }, [edges, nodes, activeFloor]);
 
   // Filter path segments that are visible on current floor
-  const visiblePathSegments = React.useMemo(() => {
+  const visiblePathSegments = useMemo(() => {
     const segments = [];
+    
     for (let i = 0; i < path.length - 1; i++) {
       const fromNode = nodes.find(n => n.node_id === path[i]);
       const toNode = nodes.find(n => n.node_id === path[i + 1]);
       
-      if (fromNode && toNode) {
-        // Show segment if both nodes are on current floor
-        // OR if it's a staircase connection to/from this floor
-        const fromFloor = fromNode.floor || 1;
-        const toFloor = toNode.floor || 1;
-        
-        if (fromFloor === activeFloor || toFloor === activeFloor) {
-          segments.push({
-            from: fromNode,
-            to: toNode,
-            fromFloor,
-            toFloor,
-            isInterFloor: fromFloor !== toFloor,
-            isStaircase: fromNode.type === 'stair' || toNode.type === 'stair'
-          });
-        }
+      if (!fromNode || !toNode) continue;
+      
+      const fromFloor = fromNode.floor || 1;
+      const toFloor = toNode.floor || 1;
+      
+      // Show segment if:
+      // 1. Both nodes are on current floor, OR
+      // 2. It's a staircase connection involving current floor
+      if (fromFloor === activeFloor && toFloor === activeFloor) {
+        // Same floor segment
+        segments.push({
+          from: fromNode,
+          to: toNode,
+          fromFloor,
+          toFloor,
+          isInterFloor: false,
+          isStaircase: false
+        });
+      } else if ((fromFloor === activeFloor || toFloor === activeFloor) && 
+                 (fromNode.type === 'stair' || toNode.type === 'stair')) {
+        // Staircase connection involving current floor
+        segments.push({
+          from: fromNode,
+          to: toNode,
+          fromFloor,
+          toFloor,
+          isInterFloor: true,
+          isStaircase: true
+        });
       }
     }
+    
     return segments;
   }, [path, nodes, activeFloor]);
 
   // Calculate map bounds based on active floor nodes
-  const calculateBounds = () => {
-    if (floorNodes.length === 0) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  const { bounds, mapWidth, mapHeight, mapCenterX, mapCenterY } = useMemo(() => {
+    if (floorNodes.length === 0) {
+      return {
+        bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
+        mapWidth: 0,
+        mapHeight: 0,
+        mapCenterX: 0,
+        mapCenterY: 0
+      };
+    }
 
     const xs = floorNodes.map(n => n.x);
     const ys = floorNodes.map(n => n.y);
 
-    return {
+    const bounds = {
       minX: Math.min(...xs),
       maxX: Math.max(...xs),
       minY: Math.min(...ys),
       maxY: Math.max(...ys),
     };
-  };
-
-  const bounds = calculateBounds();
-  const mapWidth = bounds.maxX - bounds.minX;
-  const mapHeight = bounds.maxY - bounds.minY;
-  const mapCenterX = (bounds.minX + bounds.maxX) / 2;
-  const mapCenterY = (bounds.minY + bounds.maxY) / 2;
+    
+    const mapWidth = bounds.maxX - bounds.minX;
+    const mapHeight = bounds.maxY - bounds.minY;
+    const mapCenterX = (bounds.minX + bounds.maxX) / 2;
+    const mapCenterY = (bounds.minY + bounds.maxY) / 2;
+    
+    return { bounds, mapWidth, mapHeight, mapCenterX, mapCenterY };
+  }, [floorNodes]);
 
   // Initialize map for current floor
   useEffect(() => {
@@ -142,7 +195,7 @@ export const MapView: React.FC<MapViewProps> = ({
       initialScaleRef.current = initialScale;
       initialTranslateRef.current = { x: initialTranslateX, y: initialTranslateY };
     }
-  }, [floorNodes, mapWidth, mapHeight]); // Changed dependencies
+  }, [floorNodes, mapWidth, mapHeight, mapCenterX, mapCenterY]);
 
   // Calculate distance between two points
   const calculateDistance = (x1: number, y1: number, x2: number, y2: number) => {
@@ -328,7 +381,7 @@ export const MapView: React.FC<MapViewProps> = ({
   const handleFloorChange = (floor: number) => {
     setActiveFloor(floor);
     setShowFloorSelector(false);
-    setTimeout(resetView, 100); // Reset view after floor change
+    setTimeout(resetView, 100);
   };
 
   const getNodeColor = (type: string): string => {
@@ -486,9 +539,9 @@ export const MapView: React.FC<MapViewProps> = ({
   // Render inter-floor path indicators (for staircases)
   const renderInterFloorPaths = () => {
     return visiblePathSegments
-      .filter(segment => segment.isInterFloor)
+      .filter(segment => segment.isInterFloor && segment.isStaircase)
       .map((segment, index) => {
-        const { from, to, isStaircase } = segment;
+        const { from, to } = segment;
         
         if (!from || !to) return null;
 
@@ -509,20 +562,9 @@ export const MapView: React.FC<MapViewProps> = ({
               stroke="#9D4EDD"
               strokeWidth={4}
               strokeLinecap="round"
-              strokeDasharray={isStaircase ? "8,4" : "0"}
+              strokeDasharray="8,4"
               opacity="0.7"
             />
-            
-            {/* Direction indicator for staircases */}
-            {isStaircase && (
-              <Circle
-                cx={from.x}
-                cy={from.y}
-                r={6}
-                fill="#9D4EDD"
-                opacity="0.9"
-              />
-            )}
           </G>
         );
       });
@@ -629,10 +671,16 @@ export const MapView: React.FC<MapViewProps> = ({
 
             {/* Draw edges for current floor */}
             {floorEdges.map((edge, index) => {
-              const fromNode = floorNodes.find(n => n.node_id === edge.from);
-              const toNode = floorNodes.find(n => n.node_id === edge.to);
+              const fromNode = nodes.find(n => n.node_id === edge.from);
+              const toNode = nodes.find(n => n.node_id === edge.to);
+              
               if (!fromNode || !toNode) return null;
 
+              const fromFloor = fromNode.floor || 1;
+              const toFloor = toNode.floor || 1;
+              const isStairConnection = fromNode.type === 'stair' || toNode.type === 'stair';
+              const isInterFloor = fromFloor !== toFloor;
+              
               const pathEdge = isPathEdge(edge.from, edge.to);
 
               return (
@@ -642,25 +690,32 @@ export const MapView: React.FC<MapViewProps> = ({
                   y1={fromNode.y}
                   x2={toNode.x}
                   y2={toNode.y}
-                  stroke={pathEdge ? "url(#pathGradient)" : "#CBD5E0"}
-                  strokeWidth={pathEdge ? 6 : 2}
+                  stroke={
+                    pathEdge 
+                      ? "url(#pathGradient)" 
+                      : isInterFloor && isStairConnection
+                        ? "#9D4EDD"
+                        : "#CBD5E0"
+                  }
+                  strokeWidth={
+                    pathEdge 
+                      ? 6 
+                      : isInterFloor && isStairConnection
+                        ? 4
+                        : 2
+                  }
                   strokeLinecap="round"
-                  opacity={pathEdge ? 0.9 : 0.6}
+                  strokeDasharray={isInterFloor && isStairConnection ? "8,4" : "0"}
+                  opacity={pathEdge ? 0.9 : isInterFloor ? 0.7 : 0.6}
                 />
               );
             })}
-
-            {/* Draw inter-floor paths (staircases) */}
-            {renderInterFloorPaths()}
 
             {/* Draw path segments */}
             {visiblePathSegments.map((segment, index) => {
               const { from, to, isInterFloor, isStaircase } = segment;
               
               if (!from || !to) return null;
-
-              // Skip if it's an inter-floor segment but not a staircase
-              if (isInterFloor && !isStaircase) return null;
 
               return (
                 <G key={`path-${index}`}>
@@ -817,7 +872,7 @@ export const MapView: React.FC<MapViewProps> = ({
         </Svg>
       </View>
 
-      {/* Map controls */}
+      {/* Map Controls */}
       <View style={styles.mapControls}>
         <View style={styles.controlGroup}>
           <TouchableOpacity style={styles.controlButton} onPress={zoomIn}>
@@ -831,11 +886,9 @@ export const MapView: React.FC<MapViewProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Scale indicator with floor info */}
+        {/* Scale indicator */}
         <View style={styles.scaleIndicator}>
-          <Text style={styles.scaleText}>
-            Floor {activeFloor} • {Math.round(scale * 100)}%
-          </Text>
+          <Text style={styles.scaleText}>{Math.round(scale * 100)}%</Text>
         </View>
 
         {/* Instructions */}

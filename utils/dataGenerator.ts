@@ -3,36 +3,33 @@ import { Edge, Node } from './dijkstra';
 
 const baseNodes: Omit<Node, 'floor'>[] = [
   { qr_id: "entrance", node_id: "entrance", x: 931.02, y: 364.36, type: "entrance", label: "Main Entrance" },
-  { qr_id: "j1", node_id: "j1", x: 822.85, y: 364.36, type: "junction", label: "junction 1" },
-  { qr_id: "j2", node_id: "j2", x: 599.68, y: 364.36, type: "junction", label: "junction 2" },
-  { qr_id: "j3", node_id: "j3", x: 484.58, y: 364.36, type: "junction", label: "junction 3" },
-  { qr_id: "j4", node_id: "j4", x: 198.09, y: 364.36, type: "junction", label: "junction 4" },
-  { qr_id: "j5", node_id: "j5", x: 198.09, y: 1234.32, type: "junction", label: "junction 5" },
-  { qr_id: "j6", node_id: "j6", x: 305.98, y: 1234.32, type: "junction", label: "junction 6" },
-  { qr_id: "j7", node_id: "j7", x: 484.58, y: 1234.32, type: "junction", label: "junction 7" },
-  { qr_id: "j8", node_id: "j8", x: 484.58, y: 1119.12, type: "junction", label: "junction 8" },
-  { qr_id: "j9", node_id: "j9", x: 822.85, y: 1119.12, type: "junction", label: "junction 9" },
-  { qr_id: "cf", node_id: "cf", x: 599.68, y: 305.74, type: "café", label: "café" },
-  { qr_id: "rst", node_id: "rst", x: 484.58, y: 640.78, type: "restaurant", label: "restaurant" },
-
-  { qr_id: "str_up", node_id: "str_up", x: 198.09, y: 177.72, type: "stair", label: "Stair Up" },
-  { qr_id: "str_down", node_id: "str_down", x: 198.09, y: 177.72, type: "stair", label: "Stair Down" },
-
+  { qr_id: "j1", node_id: "j1", x: 822.85, y: 364.36, type: "junction", label: "Junction 1" },
+  { qr_id: "j2", node_id: "j2", x: 599.68, y: 364.36, type: "junction", label: "Junction 2" },
+  { qr_id: "j3", node_id: "j3", x: 484.58, y: 364.36, type: "junction", label: "Junction 3" },
+  { qr_id: "j4", node_id: "j4", x: 198.09, y: 364.36, type: "junction", label: "Junction 4" },
+  { qr_id: "j5", node_id: "j5", x: 198.09, y: 1234.32, type: "junction", label: "Junction 5" },
+  { qr_id: "j6", node_id: "j6", x: 305.98, y: 1234.32, type: "junction", label: "Junction 6" },
+  { qr_id: "j7", node_id: "j7", x: 484.58, y: 1234.32, type: "junction", label: "Junction 7" },
+  { qr_id: "j8", node_id: "j8", x: 484.58, y: 1119.12, type: "junction", label: "Junction 8" },
+  { qr_id: "j9", node_id: "j9", x: 822.85, y: 1119.12, type: "junction", label: "Junction 9" },
+  { qr_id: "cf", node_id: "cf", x: 599.68, y: 305.74, type: "café", label: "Café" },
+  { qr_id: "rst", node_id: "rst", x: 484.58, y: 640.78, type: "restaurant", label: "Restaurant" },
+  { qr_id: "stair", node_id: "stair", x: 198.09, y: 177.72, type: "stair", label: "Staircase" },
   { qr_id: "ex", node_id: "ex", x: 305.98, y: 1388.67, type: "exit", label: "Exit" },
 ];
 
 // Base shop positions
 const shopPositions = [
-  { x: 198.09, y: 514.4 }, // shop 1
-  { x: 198.09, y: 836.88 }, // shop 2
-  { x: 198.09, y: 1130.93 }, // shop 3
-  { x: 484.58, y: 996 }, // shop 4
-  { x: 198.09, y: 994.79 }, // shop 5
-  { x: 822.85, y: 997.37 }, // shop 6
-  { x: 647.8 , y: 1119.12 }, // shop 7
-  { x: 822.85, y: 841.4 }, // shop 8
-  { x: 484.58, y: 894 }, // shop 9
-  { x: 822.85, y: 622.4}, // shop 10
+  { x: 198.09, y: 514.4 },
+  { x: 198.09, y: 836.88 },
+  { x: 198.09, y: 1130.93 },
+  { x: 484.58, y: 996 },
+  { x: 198.09, y: 994.79 },
+  { x: 822.85, y: 997.37 },
+  { x: 647.8, y: 1119.12 },
+  { x: 822.85, y: 841.4 },
+  { x: 484.58, y: 894 },
+  { x: 822.85, y: 622.4 },
 ];
 
 // Base edges
@@ -41,7 +38,7 @@ const baseEdges: Omit<Edge, 'floor'>[] = [
   { from: "j1", to: "j2", distance: 22.32 },
   { from: "j2", to: "j3", distance: 11.51 },
   { from: "j3", to: "j4", distance: 28.72 },
-  { from: "j1", to: "shop10", distance: 27.64  },
+  { from: "j1", to: "shop10", distance: 27.64 },
   { from: "shop10", to: "shop8", distance: 15.92 },
   { from: "shop8", to: "shop6", distance: 19.74 },
   { from: "shop6", to: "j9", distance: 12.17 },
@@ -60,14 +57,11 @@ const baseEdges: Omit<Edge, 'floor'>[] = [
   { from: "shop2", to: "shop5", distance: 15.80 },
   { from: "shop5", to: "shop3", distance: 13.60 },
   { from: "shop3", to: "j5", distance: 10.34 },
-  { from: "shop1", to: "str_up", distance: 16.56 },
-  { from: "shop1", to: "str_down", distance: 16.56 },
+  { from: "j4", to: "stair", distance: 18.66 },
   { from: "j6", to: "ex", distance: 15.43 },
-  { from: "j4", to: "str_up", distance: 18.66 },
-  { from: "j4", to: "str_down", distance: 18.66 },
 ];
 
-// helpers
+// Helper function
 function distance(a: Node, b: Node): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -93,75 +87,75 @@ export function generateMultiFloorData(): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
+  // Generate nodes for each floor (1-10)
   for (let floor = 1; floor <= 10; floor++) {
+    // Add base nodes for this floor
     baseNodes.forEach(baseNode => {
       nodes.push({
         ...baseNode,
         node_id: `${baseNode.node_id}_${floor}`,
         qr_id: `${baseNode.qr_id}_${floor}`,
         floor,
-        label: `${baseNode.label} Floor ${floor}`,
+        label: `${baseNode.label} (Floor ${floor})`,
       });
     });
 
+    // Add shops for this floor
     for (let shopNum = 1; shopNum <= 10; shopNum++) {
       const globalShopNum = (floor - 1) * 10 + shopNum;
       const pos = shopPositions[shopNum - 1];
       nodes.push({
-        qr_id: `sp${globalShopNum}_${floor}`,
-        node_id: `sp${globalShopNum}_${floor}`,
+        qr_id: `shop${globalShopNum}_${floor}`,
+        node_id: `shop${globalShopNum}_${floor}`,
         floor,
         x: pos.x,
         y: pos.y,
         type: "shop",
-        label: `Store ${globalShopNum}`,
+        label: `Store ${globalShopNum} (Floor ${floor})`,
       });
     }
 
+    // Add edges for this floor
     baseEdges.forEach(e => {
       let from = e.from;
       let to = e.to;
 
+      // Handle shop node IDs
       if (from.startsWith("shop")) {
-        const n = parseInt(from.replace("shop", ""));
-        from = `sp${(floor - 1) * 10 + n}_${floor}`;
+        const shopNum = parseInt(from.replace("shop", ""));
+        from = `shop${(floor - 1) * 10 + shopNum}_${floor}`;
       }
       if (to.startsWith("shop")) {
-        const n = parseInt(to.replace("shop", ""));
-        to = `sp${(floor - 1) * 10 + n}_${floor}`;
+        const shopNum = parseInt(to.replace("shop", ""));
+        to = `shop${(floor - 1) * 10 + shopNum}_${floor}`;
       }
 
-      if (!from.includes("_")) from = `${from}_${floor}`;
-      if (!to.includes("_")) to = `${to}_${floor}`;
+      // Add floor suffix to other nodes
+      from = `${from}_${floor}`;
+      to = `${to}_${floor}`;
 
       edges.push({ from, to, distance: e.distance });
     });
   }
 
+  // Connect staircases between floors
   for (let floor = 1; floor <= 10; floor++) {
+    // Connect to floor above (if exists)
     if (floor < 10) {
-      edges.push({ from: `str_up_${floor}`, to: `str_down_${floor + 1}`, distance: 10 });
-      edges.push({ from: `str_down_${floor + 1}`, to: `str_up_${floor}`, distance: 10 });
+      edges.push({ 
+        from: `stair_${floor}`, 
+        to: `stair_${floor + 1}`, 
+        distance: 5 // Staircase travel distance
+      });
     }
+    // Connect to floor below (if exists)
     if (floor > 1) {
-      edges.push({ from: `str_down_${floor}`, to: `str_up_${floor - 1}`, distance: 10 });
-      edges.push({ from: `str_up_${floor - 1}`, to: `str_down_${floor}`, distance: 10 });
+      edges.push({ 
+        from: `stair_${floor}`, 
+        to: `stair_${floor - 1}`, 
+        distance: 5 // Staircase travel distance
+      });
     }
-  }
-
-  for (let floor = 1; floor <= 10; floor++) {
-    const sameFloorNodes = nodes.filter(n => n.floor === floor);
-    const stairs = sameFloorNodes.filter(n => n.type === 'stair');
-    const walkables = sameFloorNodes.filter(n => n.type !== 'stair');
-
-    stairs.forEach(stair => {
-      const nearest = findNearestWalkableNode(stair, walkables);
-      if (nearest) {
-        const d = distance(stair, nearest);
-        edges.push({ from: stair.node_id, to: nearest.node_id, distance: d });
-        edges.push({ from: nearest.node_id, to: stair.node_id, distance: d });
-      }
-    });
   }
 
   return { nodes, edges };

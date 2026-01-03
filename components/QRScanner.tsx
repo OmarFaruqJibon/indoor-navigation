@@ -97,17 +97,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   scanArea: {
-    width: 250,
-    height: 250,
+    width: 300,
+    height: 300,
     justifyContent: "center",
     alignItems: "center",
   },
   scanFrame: {
-    width: 200,
-    height: 200,
+    width: 280,
+    height: 280,
     borderWidth: 2,
-    borderColor: "#00FF00",
-    backgroundColor: "transparent",
+    borderColor: "#00e400ff",
+    backgroundColor: "#00ff0015",
   },
   scanText: {
     color: "white",

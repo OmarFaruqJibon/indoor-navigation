@@ -38,7 +38,7 @@ export const NodeList: React.FC<NodeListProps> = ({
   const getTypeLabel = (type: string): string => {
     const labels: Record<string, string> = {
       shop: "Shops",
-      café: "Café",
+      café: "Cafe",
       restaurant: "Restaurants",
       entrance: "Entrance/Exit",
       stair: "Stairs",
@@ -89,7 +89,7 @@ const getNodeColor = (type: string): string => {
       return "#F44336";
     case "shop":
       return "#2196F3";
-    case "café":
+    case "cafe":
       return "#FF9800";
     case "restaurant":
       return "#E91E63";
