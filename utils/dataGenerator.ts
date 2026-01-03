@@ -14,23 +14,25 @@ const baseNodes: Omit<Node, 'floor'>[] = [
   { qr_id: "j9", node_id: "j9", x: 822.85, y: 1119.12, type: "junction", label: "junction 9" },
   { qr_id: "cf", node_id: "cf", x: 599.68, y: 305.74, type: "café", label: "café" },
   { qr_id: "rst", node_id: "rst", x: 484.58, y: 640.78, type: "restaurant", label: "restaurant" },
+
   { qr_id: "str_up", node_id: "str_up", x: 198.09, y: 177.72, type: "stair", label: "Stair Up" },
-  { qr_id: "str_down", node_id: "str_down", x: 305.98, y: 177.72, type: "stair", label: "Stair Down" },
+  { qr_id: "str_down", node_id: "str_down", x: 198.09, y: 177.72, type: "stair", label: "Stair Down" },
+
   { qr_id: "ex", node_id: "ex", x: 305.98, y: 1388.67, type: "exit", label: "Exit" },
 ];
 
 // Base shop positions
 const shopPositions = [
-  { x: 198.09, y: 450 }, // 1
-  { x: 198.09, y: 836.88 }, // 3
-  { x: 198.09, y: 1130.93 }, // 3
-  { x: 484.58, y: 980 }, // 4
-  { x: 198.09, y: 994.79 }, // 5
-  { x: 822.85, y: 997.37 }, // 6
-  { x: 650, y: 1119.12 }, // 7
-  { x: 822.85, y: 800 }, // 8
-  { x: 484.58, y: 800 }, // 9
-  { x: 822.85, y: 640.78}, // 10
+  { x: 198.09, y: 514.4 }, // shop 1
+  { x: 198.09, y: 836.88 }, // shop 2
+  { x: 198.09, y: 1130.93 }, // shop 3
+  { x: 484.58, y: 996 }, // shop 4
+  { x: 198.09, y: 994.79 }, // shop 5
+  { x: 822.85, y: 997.37 }, // shop 6
+  { x: 647.8 , y: 1119.12 }, // shop 7
+  { x: 822.85, y: 841.4 }, // shop 8
+  { x: 484.58, y: 894 }, // shop 9
+  { x: 822.85, y: 622.4}, // shop 10
 ];
 
 // Base edges
@@ -39,14 +41,12 @@ const baseEdges: Omit<Edge, 'floor'>[] = [
   { from: "j1", to: "j2", distance: 22.32 },
   { from: "j2", to: "j3", distance: 11.51 },
   { from: "j3", to: "j4", distance: 28.72 },
-  // { from: "j1", to: "shop6", distance: 63.30 },
   { from: "j1", to: "shop10", distance: 27.64  },
   { from: "shop10", to: "shop8", distance: 15.92 },
   { from: "shop8", to: "shop6", distance: 19.74 },
   { from: "shop6", to: "j9", distance: 12.17 },
   { from: "j2", to: "cf", distance: 5.86 },
   { from: "j3", to: "rst", distance: 27.64 },
-  // { from: "rst", to: "j8", distance: 47.83 },
   { from: "rst", to: "shop9", distance: 15.92 },
   { from: "shop9", to: "shop4", distance: 18.00 },
   { from: "shop4", to: "j8", distance: 13.91 },
